@@ -1,0 +1,17 @@
+{
+  "name": "Fadvendas",
+  "short_name": "Fadvendas",
+  "description": "ERP e E-commerce com BI integrado",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0f1a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
