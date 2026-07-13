@@ -1,0 +1,267 @@
+/**
+ * STORE-STATUS.CSS v1.0
+ * Overlay de Bloqueio - Sabbath Mode + Night Closed
+ */
+
+/* ================================================
+   OVERLAY - Sobreposição Full-Screen
+   ================================================ */
+
+#store-closed-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(11, 15, 26, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+#store-closed-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ================================================
+   CONTAINER E CONTEÚDO
+   ================================================ */
+
+.store-closed-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+}
+
+.store-closed-content {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    border-radius: 24px;
+    padding: 60px 40px;
+    max-width: 600px;
+    text-align: center;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ================================================
+   EMOJI GRANDE
+   ================================================ */
+
+.store-closed-emoji {
+    font-size: 80px;
+    margin-bottom: 20px;
+    display: inline-block;
+    animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+/* ================================================
+   TEXTOS
+   ================================================ */
+
+.store-closed-title {
+    font-size: 42px;
+    font-weight: 900;
+    color: #ffffff;
+    margin: 0 0 10px 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.store-closed-subtitle {
+    font-size: 24px;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin: 0 0 20px 0;
+    letter-spacing: 1px;
+}
+
+.store-closed-description {
+    font-size: 16px;
+    color: #cbd5e1;
+    line-height: 1.8;
+    margin: 0 0 30px 0;
+    max-width: 500px;
+}
+
+/* ================================================
+   TIMER - REABERTURA
+   ================================================ */
+
+.store-closed-timer {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 30px 0;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+.store-closed-reopens {
+    font-size: 14px;
+    color: #94a3b8;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.store-closed-time {
+    font-size: 20px;
+    font-weight: 700;
+    color: #3b82f6;
+    margin: 0;
+    font-family: 'Courier New', monospace;
+}
+
+/* ================================================
+   INFO ADICIONAL
+   ================================================ */
+
+.store-closed-info {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #86efac;
+}
+
+.store-closed-info p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ================================================
+   RESPONSIVIDADE
+   ================================================ */
+
+@media (max-width: 768px) {
+    .store-closed-content {
+        padding: 40px 30px;
+        border-radius: 20px;
+    }
+
+    .store-closed-emoji {
+        font-size: 60px;
+        margin-bottom: 15px;
+    }
+
+    .store-closed-title {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+
+    .store-closed-subtitle {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    .store-closed-description {
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
+    .store-closed-timer {
+        margin: 20px 0;
+        padding: 15px;
+    }
+
+    .store-closed-time {
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    #store-closed-overlay {
+        padding: 10px;
+    }
+
+    .store-closed-content {
+        padding: 30px 20px;
+        border-radius: 16px;
+    }
+
+    .store-closed-emoji {
+        font-size: 50px;
+    }
+
+    .store-closed-title {
+        font-size: 24px;
+    }
+
+    .store-closed-subtitle {
+        font-size: 16px;
+    }
+
+    .store-closed-description {
+        font-size: 13px;
+    }
+}
+
+/* ================================================
+   ACESSIBILIDADE
+   ================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .store-closed-emoji {
+        animation: none;
+    }
+
+    .store-closed-timer {
+        animation: none;
+    }
+
+    .store-closed-content {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+/* ================================================
+   PRINT STYLES
+   ================================================ */
+
+@media print {
+    #store-closed-overlay {
+        display: none;
+    }
+}
