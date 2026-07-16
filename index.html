@@ -7,13 +7,35 @@
     <meta name="description" content="FadVendas - ERP & E-commerce com BI integrado">
     <title>Vendas | Business Intelligence</title>
 
+    <!-- ✅ NOVO: mata qualquer Service Worker antigo + limpa todos os caches.
+         Resolve o bug de "preciso limpar cache toda vez que troco de conta"
+         (instalações antigas como PWA deixam um Service Worker "fantasma"
+         servindo JS desatualizado pra sempre, já que nada no código atual
+         registra ou atualiza ele). Precisa ser o PRIMEIRO script da página. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(reg => reg.unregister());
+            });
+        }
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
+    </script>
+
     <!-- PWA -->
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css">
+    <!-- ✅ NOVO: ?v=1 força o navegador a buscar a versão mais recente do
+         CSS sempre que você mudar esse número (evita cache HTTP antigo,
+         que existe independente de Service Worker). Suba esse número toda
+         vez que publicar uma mudança em style.css. -->
+    <link rel="stylesheet" href="style.css?v=1">
 
     <!-- TAILWIND CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -118,11 +140,13 @@
                 <span class="block">Entrar</span>
             </button>
 
-            <!-- Logout (logado) — preenchido dinamicamente pelo auth.js com info do usuário -->
+            <!-- Conta (logado) — preenchido dinamicamente pelo auth.js com info do usuário.
+                 ✅ NOVO: clique abre o cartão de perfil (nome/email/telefone/role),
+                 em vez de deslogar direto no primeiro toque. -->
             <button id="logout-btn"
                 class="w-full hidden flex items-center gap-3 p-3 rounded-2xl border border-white/5 text-slate-400 font-bold text-xs transition-all justify-center lg:justify-start"
-                data-action="logout"
-                title="Sair">
+                data-action="open-profile"
+                title="Ver perfil">
                 <i data-lucide="log-out" class="flex-shrink-0"></i>
                 <span class="block">Sair</span>
             </button>
@@ -204,6 +228,27 @@
         <!-- ===== TENANTS / VENDEDORES ===== -->
         <section id="tenants-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-purple-500">🏪 GERENCIAR VENDEDORES</h2>
+
+            <!-- ===== ✅ NOVO: ADMINISTRADORES SUPREMOS =====
+                 Só o Admin Supremo vê essa seção (a section inteira já é
+                 supremo-only). Permite promover qualquer conta já cadastrada
+                 a Admin Supremo (ex: diretor da instituição fiscalizando o
+                 marketplace) e revogar acesso de quem foi promovido. A conta
+                 FUNDADORA nunca aparece com botão de revogar aqui, e o banco
+                 bloqueia qualquer tentativa de alterar o cargo dela, mesmo
+                 que alguém tente forçar pelo console. -->
+            <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
+                <div class="flex justify-between items-center mb-4 gap-3 flex-wrap">
+                    <h3 class="text-lg font-black text-red-400">👑 Administradores Supremos</h3>
+                    <button onclick="window.APP.tenants.promptPromoteSupreme()" class="bg-red-600 hover:bg-red-500 text-white text-xs font-black py-2 px-4 rounded-xl transition-all whitespace-nowrap">
+                        + PROMOVER ADMIN
+                    </button>
+                </div>
+                <div id="supreme-admins-list" class="space-y-3">
+                    <div class="text-slate-600 text-center py-4">Carregando...</div>
+                </div>
+            </div>
+
             <div id="tenants-stats" class="mb-8">
                 <div class="text-slate-600 text-center py-4">Carregando stats...</div>
             </div>
@@ -306,6 +351,14 @@
                 <h3 class="text-lg font-black text-slate-300 mb-4">📊 Anúncios Publicados</h3>
                 <div id="ads-list" class="space-y-3">
                     <div class="text-center text-slate-500 py-8">Carregando anúncios...</div>
+                </div>
+            </div>
+
+            <!-- Solicitações pendentes dos vendedores (só Admin Supremo) -->
+            <div id="ads-admin-requests-wrapper" class="mt-10 hidden">
+                <h3 class="text-lg font-black text-orange-400 mb-4">📋 Solicitações Pendentes de Vendedores</h3>
+                <div id="ads-admin-requests-list" class="space-y-3">
+                    <div class="text-slate-600 text-center py-8">Carregando...</div>
                 </div>
             </div>
         </section>
@@ -421,7 +474,7 @@
             <span>Entrar</span>
         </button>
 
-        <button class="bnav-btn bnav-logout hidden" id="bnav-logout-btn" data-action="logout" title="Sair">
+        <button class="bnav-btn bnav-logout hidden" id="bnav-logout-btn" data-action="open-profile" title="Ver perfil">
             <i data-lucide="log-out"></i>
             <span>Sair</span>
         </button>
@@ -495,6 +548,41 @@
     </div>
 
     <!-- ========================================
+         PERFIL DO USUÁRIO
+         ✅ NOVO: aberto ao clicar no botão de conta (sidebar ou bottom nav).
+         Mostra nome, role, email e telefone, com o logout dentro dele.
+         ======================================== -->
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+        <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-sm border border-white/10 shadow-2xl text-center">
+            <div id="profile-modal-avatar" class="w-20 h-20 mx-auto rounded-full flex items-center justify-center font-black text-2xl text-white mb-4">
+                --
+            </div>
+            <h3 id="profile-modal-name" class="text-xl font-black text-white mb-1">—</h3>
+            <p id="profile-modal-role" class="text-sm font-bold mb-6">—</p>
+
+            <div class="bg-white/5 rounded-2xl p-4 text-left space-y-3 mb-6">
+                <div class="flex justify-between items-center text-sm gap-3">
+                    <span class="text-slate-400 flex items-center gap-2 flex-shrink-0">
+                        <i data-lucide="mail" class="w-4 h-4"></i> Email
+                    </span>
+                    <span id="profile-modal-email" class="text-white font-bold truncate">—</span>
+                </div>
+                <div class="flex justify-between items-center text-sm gap-3">
+                    <span class="text-slate-400 flex items-center gap-2 flex-shrink-0">
+                        <i data-lucide="phone" class="w-4 h-4"></i> Telefone
+                    </span>
+                    <span id="profile-modal-phone" class="text-white font-bold truncate">—</span>
+                </div>
+            </div>
+
+            <button data-action="logout" class="w-full bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-2xl transition-all mb-2 flex items-center justify-center gap-2">
+                <i data-lucide="log-out" class="w-4 h-4"></i> SAIR DA CONTA
+            </button>
+            <button class="w-full text-slate-400 hover:text-white font-bold py-2 transition-all" data-action="close-profile-modal">Fechar</button>
+        </div>
+    </div>
+
+    <!-- ========================================
          TENANT DETAILS MODAL
          ======================================== -->
     <div id="tenant-details-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
@@ -549,23 +637,26 @@
 
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
+         ✅ NOVO: ?v=1 em todos os arquivos locais — suba esse número toda
+         vez que publicar uma mudança em qualquer um deles, pra garantir
+         que todo mundo recebe a versão nova sem precisar limpar cache.
          ======================================== -->
-    <script src="config.js"></script>
-    <script src="storage.js"></script>
-    <script src="wrapper.js"></script>
-    <script src="auth.js"></script>
-    <script src="store-status.js"></script>
-    <script src="cart.js"></script>
-    <script src="products.js"></script>
-    <script src="ads.js"></script>
-    <script src="bi.js"></script>
-    <script src="navigation.js"></script>
-    <script src="tenants.js"></script>
-    <script src="orders.js"></script>
-    <script src="order-management.js"></script>
-    <script src="admin-warnings.js"></script>
-    <script src="vendor-settings.js"></script>
-    <script src="app.js"></script>
+    <script src="config.js?v=1"></script>
+    <script src="storage.js?v=1"></script>
+    <script src="wrapper.js?v=1"></script>
+    <script src="auth.js?v=1"></script>
+    <script src="store-status.js?v=1"></script>
+    <script src="cart.js?v=1"></script>
+    <script src="products.js?v=1"></script>
+    <script src="ads.js?v=1"></script>
+    <script src="bi.js?v=2"></script>
+    <script src="navigation.js?v=1"></script>
+    <script src="tenants.js?v=2"></script>
+    <script src="orders.js?v=4"></script>
+    <script src="order-management.js?v=1"></script>
+    <script src="admin-warnings.js?v=1"></script>
+    <script src="vendor-settings.js?v=1"></script>
+    <script src="app.js?v=1"></script>
 
     <!-- Preview em tempo real do anúncio texto -->
     <script>
