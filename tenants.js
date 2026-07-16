@@ -1,12 +1,20 @@
 /**
- * TENANTS.JS - NOVO MÓDULO
+ * TENANTS.JS v2.0
  * 🏪 Dashboard de Gerenciamento de Vendedores ("Inquilinos")
  * Apenas para SUPREMO - Ver, analisar e controlar todos os vendedores
+ * ✅ v2.0 NOVO: gestão de Administradores Supremos — o Admin Supremo pode
+ *    promover qualquer conta já cadastrada a Admin Supremo (ex: diretor da
+ *    instituição, pra fiscalizar tudo) e revogar acesso de quem promoveu.
+ *    A conta FUNDADORA do sistema (marcada como is_founder no banco) nunca
+ *    pode ter o cargo alterado por ninguém — nem por outro Admin Supremo —
+ *    isso é garantido tanto aqui no app quanto por um gatilho no próprio
+ *    banco de dados (segunda camada de defesa).
  */
 
 const Tenants = {
     tenants: [],
     products: [],
+    supremeAdmins: [],
 
     async loadDashboard() {
         try {
@@ -41,6 +49,9 @@ const Tenants = {
             // 3. Renderizar
             this.renderTenantsList();
             this.renderTenantStats();
+
+            // 4. ✅ NOVO: carregar e renderizar Admins Supremos
+            await this.loadSupremeAdmins();
 
             log(`✅ ${this.tenants.length} vendedores carregados`, 'success');
 
@@ -329,5 +340,169 @@ const Tenants = {
     closeTenantDetailsModal() {
         const modal = document.getElementById('tenant-details-modal');
         if (modal) modal.classList.add('hidden');
+    },
+
+    // ============================================================
+    // ✅ NOVO (v2.0): GESTÃO DE ADMINISTRADORES SUPREMOS
+    // ============================================================
+
+    /**
+     * Carrega todas as contas com role='supreme' e renderiza a lista.
+     */
+    async loadSupremeAdmins() {
+        try {
+            const { data, error } = await _supabase
+                .from('profiles')
+                .select('id, email, full_name, is_founder, created_at')
+                .eq('role', 'supreme')
+                .order('is_founder', { ascending: false })
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+
+            this.supremeAdmins = data || [];
+            this.renderSupremeAdmins();
+        } catch (err) {
+            log(`❌ Erro ao carregar admins supremos: ${err.message}`, 'error');
+        }
+    },
+
+    /**
+     * Renderiza a lista de Admins Supremos. A conta fundadora (is_founder)
+     * aparece com um selo "Fundador" e SEM botão de revogar — ela é
+     * protegida também no banco, então mesmo alguém tentando forçar essa
+     * chamada pelo console não consegue mudar o cargo dela.
+     */
+    renderSupremeAdmins() {
+        const list = document.getElementById('supreme-admins-list');
+        if (!list) return;
+
+        if (!this.supremeAdmins || this.supremeAdmins.length === 0) {
+            list.innerHTML = '<div class="text-slate-600 text-center py-4">Nenhum admin supremo encontrado</div>';
+            return;
+        }
+
+        const currentUserId = window.APP?.auth?.userId;
+
+        list.innerHTML = this.supremeAdmins.map(admin => {
+            const isFounder = !!admin.is_founder;
+            const isSelf = admin.id === currentUserId;
+
+            return `
+                <div class="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/5">
+                    <div class="flex-1 min-w-0">
+                        <span class="font-bold text-white block">
+                            ${admin.full_name || 'Sem nome'}
+                            ${isFounder ? '<span class="ml-2 text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 uppercase align-middle">🛡️ Fundador</span>' : ''}
+                            ${isSelf ? '<span class="ml-2 text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 uppercase align-middle">Você</span>' : ''}
+                        </span>
+                        <span class="text-xs text-slate-500 truncate block">${admin.email}</span>
+                    </div>
+                    ${!isFounder ? `
+                        <button onclick="window.APP.tenants.revokeSupreme('${admin.id}')" class="text-red-500 hover:text-red-400 text-xs font-bold flex-shrink-0 ml-3">
+                            🔒 Revogar Acesso
+                        </button>
+                    ` : `
+                        <span class="text-[10px] text-slate-600 font-bold uppercase flex-shrink-0 ml-3">Protegido</span>
+                    `}
+                </div>
+            `;
+        }).join('');
+    },
+
+    /**
+     * Abre um prompt simples pedindo o e-mail da pessoa a promover.
+     * A pessoa precisa já ter uma conta criada no sistema (Cadastro).
+     */
+    promptPromoteSupreme() {
+        const email = prompt('Digite o e-mail EXATO da pessoa (ela precisa já ter uma conta criada no sistema) que você quer promover a Admin Supremo:');
+        if (!email || !email.trim()) return;
+        this.promoteToSupreme(email.trim().toLowerCase());
+    },
+
+    /**
+     * Promove uma conta já existente a Admin Supremo. Acesso total ao
+     * marketplace: vê todos os pedidos, produtos de todos os vendedores,
+     * BI completo, anúncios e gestão de vendedores — pensado, por exemplo,
+     * pro diretor da instituição fiscalizar o que está sendo vendido.
+     */
+    async promoteToSupreme(email) {
+        try {
+            const { data: target, error: findError } = await _supabase
+                .from('profiles')
+                .select('id, email, full_name, role')
+                .ilike('email', email)
+                .maybeSingle();
+
+            if (findError) throw findError;
+
+            if (!target) {
+                alert('❌ Não encontrei nenhuma conta com esse e-mail.\n\nA pessoa precisa criar a conta dela primeiro (tela de Cadastro) — depois disso você consegue promover.');
+                return;
+            }
+
+            if (target.role === 'supreme') {
+                alert('ℹ️ Essa pessoa já é Admin Supremo.');
+                return;
+            }
+
+            if (!confirm(`Confirma promover "${target.full_name || target.email}" a Admin Supremo?\n\nEla passará a ter acesso TOTAL: ver e gerenciar produtos de todos os vendedores, todos os pedidos, o BI completo do marketplace, anúncios e a gestão de vendedores.`)) {
+                return;
+            }
+
+            const { error: updateError } = await _supabase
+                .from('profiles')
+                .update({ role: 'supreme' })
+                .eq('id', target.id);
+
+            if (updateError) throw updateError;
+
+            log(`✅ ${target.email} promovido a Admin Supremo`, 'success');
+            alert('✅ Promovido com sucesso!');
+
+            await this.loadSupremeAdmins();
+            await this.loadDashboard();
+        } catch (err) {
+            log(`❌ Erro ao promover: ${err.message}`, 'error');
+            alert(`❌ Erro: ${err.message}`);
+        }
+    },
+
+    /**
+     * Revoga o acesso de Admin Supremo de alguém que você promoveu
+     * (a conta volta a ser Vendedor). A conta FUNDADORA nunca aparece com
+     * esse botão na tela, e mesmo que alguém tente chamar essa função
+     * manualmente pelo console apontando pro ID da fundadora, o banco
+     * bloqueia a alteração (gatilho de proteção do fundador).
+     */
+    async revokeSupreme(userId) {
+        try {
+            const target = this.supremeAdmins.find(a => a.id === userId);
+
+            if (target?.is_founder) {
+                alert('❌ Esta conta é a fundadora do sistema e não pode ser revogada.');
+                return;
+            }
+
+            if (!confirm(`Revogar o acesso de Admin Supremo de "${target?.full_name || target?.email || 'esta conta'}"?\n\nA conta volta a ser Vendedor comum.`)) {
+                return;
+            }
+
+            const { error } = await _supabase
+                .from('profiles')
+                .update({ role: 'seller' })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            log('✅ Acesso de Admin Supremo revogado', 'success');
+            alert('✅ Acesso revogado — a conta agora é Vendedor.');
+
+            await this.loadSupremeAdmins();
+            await this.loadDashboard();
+        } catch (err) {
+            log(`❌ Erro ao revogar: ${err.message}`, 'error');
+            alert(`❌ Erro: ${err.message}`);
+        }
     }
 };
