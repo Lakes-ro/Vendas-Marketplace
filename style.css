@@ -1267,4 +1267,48 @@ input:checked + .toggle-slider:before {
         padding: 8px 12px;
         font-size: 11px;
     }
-}   
+}
+
+/* ========================================
+   ✅ NOVO: SELO DE NOTIFICAÇÃO DE VENDA
+   Aparece no botão BI (sidebar e bottom nav) quando chega uma venda
+   nova via tempo real, e some quando o vendedor abre a aba BI.
+   ======================================== */
+
+#bi-nav-btn,
+#bnav-bi {
+    position: relative;
+}
+
+.sale-badge {
+    display: none;
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 900;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 0 0 2px #0b0f1a;
+    animation: saleBadgePulse 1.5s ease-in-out infinite;
+}
+
+#bnav-bi .sale-badge {
+    top: -2px;
+    right: 14px;
+}
+
+@keyframes saleBadgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sale-badge { animation: none; }
+}

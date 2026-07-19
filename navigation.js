@@ -1,11 +1,11 @@
 /**
- * NAVIGATION.JS v3.1 - CORRIGIDO
+ * NAVIGATION.JS v3.3
  * ✅ Event listeners para data-nav e data-action (sidebar + bottom nav)
  * ✅ Todas as seções registradas (incluindo ads-requests, vendor-settings)
  * ✅ Sem dependência de onclick no HTML
  * ✅ goToTab() exposta globalmente
- * ✅ FIX: open-product-modal / close-product-modal / form "product" agora
- *    chamam window.APP.products (não window.APP.admin, que é outro app)
+ * ✅ open-profile / close-profile-modal — botão de conta abre cartão de perfil
+ * ✅ v3.3 NOVO: ao abrir a aba BI, limpa o selo de "nova venda" (Notifications)
  */
 
 const Navigation = {
@@ -17,7 +17,7 @@ const Navigation = {
         this._registerDataActionButtons();
         this._registerAuthTabs();
         this._registerForms();
-        log('✅ Navigation v3.1 inicializado', 'success');
+        log('✅ Navigation v3.3 inicializado', 'success');
     },
 
     _registerDataNavButtons() {
@@ -42,6 +42,12 @@ const Navigation = {
         switch (action) {
             case 'open-login':
                 if (window.APP?.auth) window.APP.auth.openAuthModal('login');
+                break;
+            case 'open-profile':
+                if (window.APP?.auth) window.APP.auth.openProfileModal();
+                break;
+            case 'close-profile-modal':
+                if (window.APP?.auth) window.APP.auth.closeProfileModal();
                 break;
             case 'logout':
                 if (window.APP?.auth) window.APP.auth.logout();
@@ -70,11 +76,9 @@ const Navigation = {
                 if (window.APP?.orders) window.APP.orders.checkout();
                 break;
             case 'open-product-modal':
-                // ✅ FIX: era window.APP.admin (app errado). Products.js é quem tem openModal().
                 if (window.APP?.products) window.APP.products.openModal();
                 break;
             case 'close-product-modal':
-                // ✅ FIX: era window.APP.admin (app errado). Products.js é quem tem closeModal().
                 if (window.APP?.products) window.APP.products.closeModal();
                 break;
             case 'close-auth-modal':
@@ -102,8 +106,8 @@ const Navigation = {
     },
 
     /**
-     * ✅ NOVO: feedback visual no próprio botão "Adicionar ao Carrinho" —
-     * mostra "✓ Adicionado!" por instantes, sem perder o texto/estado original.
+     * Feedback visual no botão "Adicionar ao Carrinho" — mostra
+     * "✓ Adicionado!" por instantes, sem perder o texto/estado original.
      */
     _flashAddButton(btn) {
         if (!btn || btn.dataset.flashing === '1') return;
@@ -147,12 +151,10 @@ const Navigation = {
                 else if (subType === 'signup' && window.APP?.auth) window.APP.auth.signupDirect();
                 else if (subType === 'forgot' && window.APP?.auth) window.APP.auth.resetPasswordDirect();
             } else if (formType === 'product' && window.APP?.products) {
-                // ✅ FIX: era window.APP.admin.saveProduct() (app errado, método inexistente).
                 window.APP.products.saveProductDirect();
             } else if (formType === 'checkout' && window.APP?.orders) {
                 window.APP.orders.sendOrderDirect();
             } else if (formType === 'ads' && window.APP?.ads) {
-                // saveAd recebe event e type — passar evento sintético nulo e tipo do formulário
                 window.APP.ads.saveAd(null, subType || window.APP.ads.adType || 'image');
             }
         });
@@ -201,7 +203,11 @@ const Navigation = {
     _loadDataForTab(tab) {
         if (!window.APP) return;
         try {
-            if (tab === 'bi' && window.APP.bi?.loadDashboard) window.APP.bi.loadDashboard();
+            if (tab === 'bi') {
+                if (window.APP.bi?.loadDashboard) window.APP.bi.loadDashboard();
+                // ✅ NOVO: entrar no BI "lê" as notificações de venda pendentes
+                window.APP.notifications?.clearUnseen?.();
+            }
             else if (tab === 'admin' && window.APP.products?.renderAdmin) window.APP.products.renderAdmin();
             else if (tab === 'seller' && window.APP.products?.renderSeller) window.APP.products.renderSeller();
             else if (tab === 'tenants' && window.APP.tenants?.loadDashboard) window.APP.tenants.loadDashboard();

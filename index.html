@@ -7,7 +7,7 @@
     <meta name="description" content="FadVendas - ERP & E-commerce com BI integrado">
     <title>Vendas | Business Intelligence</title>
 
-    <!-- ✅ NOVO: mata qualquer Service Worker antigo + limpa todos os caches.
+    <!-- ✅ mata qualquer Service Worker antigo + limpa todos os caches.
          Resolve o bug de "preciso limpar cache toda vez que troco de conta"
          (instalações antigas como PWA deixam um Service Worker "fantasma"
          servindo JS desatualizado pra sempre, já que nada no código atual
@@ -31,11 +31,10 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
 
     <!-- ESTILOS -->
-    <!-- ✅ NOVO: ?v=1 força o navegador a buscar a versão mais recente do
-         CSS sempre que você mudar esse número (evita cache HTTP antigo,
-         que existe independente de Service Worker). Suba esse número toda
-         vez que publicar uma mudança em style.css. -->
-    <link rel="stylesheet" href="style.css?v=1">
+    <!-- ✅ ?v=2 força o navegador a buscar a versão mais recente do CSS
+         (novo selo de notificação de venda). Suba esse número toda vez
+         que publicar uma mudança em style.css. -->
+    <link rel="stylesheet" href="style.css?v=2">
 
     <!-- TAILWIND CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -80,7 +79,7 @@
                 <span class="block font-bold text-sm group-hover:text-white">LOJA</span>
             </button>
 
-            <!-- BI - Apenas Admin Supremo -->
+            <!-- BI - Vendedor / Supremo -->
             <button id="bi-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="bi">
                 <i data-lucide="bar-chart-3" class="flex-shrink-0 text-green-500"></i>
                 <span class="block font-bold text-sm group-hover:text-white">BI / GESTÃO</span>
@@ -98,7 +97,7 @@
                 <span class="block font-bold text-sm text-blue-500 group-hover:text-blue-400">ESTOQUE</span>
             </button>
 
-            <!-- ANÚNCIOS - Vendedor / Supremo -->
+            <!-- ANÚNCIOS - Apenas Supremo -->
             <button id="ads-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="ads">
                 <i data-lucide="megaphone" class="flex-shrink-0 text-yellow-500"></i>
                 <span class="block font-bold text-sm text-yellow-500 group-hover:text-yellow-400">ANÚNCIOS</span>
@@ -140,9 +139,7 @@
                 <span class="block">Entrar</span>
             </button>
 
-            <!-- Conta (logado) — preenchido dinamicamente pelo auth.js com info do usuário.
-                 ✅ NOVO: clique abre o cartão de perfil (nome/email/telefone/role),
-                 em vez de deslogar direto no primeiro toque. -->
+            <!-- Conta (logado) -->
             <button id="logout-btn"
                 class="w-full hidden flex items-center gap-3 p-3 rounded-2xl border border-white/5 text-slate-400 font-bold text-xs transition-all justify-center lg:justify-start"
                 data-action="open-profile"
@@ -150,6 +147,11 @@
                 <i data-lucide="log-out" class="flex-shrink-0"></i>
                 <span class="block">Sair</span>
             </button>
+
+            <!-- ✅ Link discreto pra Política de Privacidade -->
+            <a href="privacidade.html" class="w-full text-center text-[10px] text-slate-600 hover:text-slate-400 font-bold py-1 transition-all hidden lg:block">
+                Política de Privacidade
+            </a>
         </div>
     </aside>
 
@@ -176,7 +178,6 @@
         <span id="bi-period-label" class="text-xs font-bold text-slate-400 uppercase tracking-wide"></span>
     </div>
 
-    <!-- ✅ NOVO: filtro de período -->
     <div class="flex flex-wrap gap-2 mb-8">
         <button class="bi-period-btn" data-period="hoje" onclick="window.APP.bi.setPeriod('hoje')">Hoje</button>
         <button class="bi-period-btn" data-period="ontem" onclick="window.APP.bi.setPeriod('ontem')">Ontem</button>
@@ -229,14 +230,7 @@
         <section id="tenants-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-purple-500">🏪 GERENCIAR VENDEDORES</h2>
 
-            <!-- ===== ✅ NOVO: ADMINISTRADORES SUPREMOS =====
-                 Só o Admin Supremo vê essa seção (a section inteira já é
-                 supremo-only). Permite promover qualquer conta já cadastrada
-                 a Admin Supremo (ex: diretor da instituição fiscalizando o
-                 marketplace) e revogar acesso de quem foi promovido. A conta
-                 FUNDADORA nunca aparece com botão de revogar aqui, e o banco
-                 bloqueia qualquer tentativa de alterar o cargo dela, mesmo
-                 que alguém tente forçar pelo console. -->
+            <!-- ===== ADMINISTRADORES SUPREMOS ===== -->
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
                 <div class="flex justify-between items-center mb-4 gap-3 flex-wrap">
                     <h3 class="text-lg font-black text-red-400">👑 Administradores Supremos</h3>
@@ -485,16 +479,13 @@
          CART DRAWER
          ======================================== -->
     <div id="cart-drawer" class="fixed right-0 top-0 w-full sm:w-96 h-screen bg-[#161b2c] border-l border-white/5 shadow-2xl translate-x-full transition-transform duration-300 z-[300] flex flex-col">
-        <!-- Header -->
         <div class="flex justify-between items-center p-6 pb-4 flex-shrink-0">
             <h3 class="text-2xl font-black">CARRINHO</h3>
             <button class="text-slate-400 hover:text-white" data-action="close-cart">
                 <i data-lucide="x" class="w-6 h-6"></i>
             </button>
         </div>
-        <!-- Items (rola) -->
         <div id="cart-items" class="flex-1 overflow-y-auto px-6 space-y-3"></div>
-        <!-- Footer fixo -->
         <div class="flex-shrink-0 border-t border-white/5 px-6 pt-4 pb-6" style="padding-bottom: max(24px, env(safe-area-inset-bottom));">
             <div class="flex justify-between text-lg font-black mb-4">
                 <span>TOTAL</span>
@@ -532,6 +523,11 @@
                     <input id="signup-phone" type="tel" placeholder="Telefone" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <input id="signup-password" type="password" placeholder="Senha (mín 6 caracteres)" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">CADASTRAR</button>
+                    <!-- ✅ NOVO: consentimento explícito + link pra Política de Privacidade -->
+                    <p class="text-[11px] text-slate-500 text-center leading-relaxed">
+                        Ao se cadastrar, você concorda com nossa
+                        <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade e Termos de Uso</a>.
+                    </p>
                 </form>
             </div>
 
@@ -549,8 +545,6 @@
 
     <!-- ========================================
          PERFIL DO USUÁRIO
-         ✅ NOVO: aberto ao clicar no botão de conta (sidebar ou bottom nav).
-         Mostra nome, role, email e telefone, com o logout dentro dele.
          ======================================== -->
     <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-sm border border-white/10 shadow-2xl text-center">
@@ -631,32 +625,34 @@
                 </select>
                 <button id="btn-finish" type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">✓ CONFIRMAR COMPRA</button>
                 <button type="button" class="w-full text-slate-400 hover:text-white font-bold py-2 transition-all" data-action="close-checkout-modal">Cancelar</button>
+                <p class="text-[11px] text-slate-500 text-center leading-relaxed">
+                    Seus dados são usados apenas para viabilizar esta compra. Veja nossa
+                    <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade</a>.
+                </p>
             </form>
         </div>
     </div>
 
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
-         ✅ NOVO: ?v=1 em todos os arquivos locais — suba esse número toda
-         vez que publicar uma mudança em qualquer um deles, pra garantir
-         que todo mundo recebe a versão nova sem precisar limpar cache.
          ======================================== -->
     <script src="config.js?v=1"></script>
     <script src="storage.js?v=1"></script>
     <script src="wrapper.js?v=1"></script>
-    <script src="auth.js?v=1"></script>
+    <script src="auth.js?v=2"></script>
     <script src="store-status.js?v=1"></script>
     <script src="cart.js?v=1"></script>
     <script src="products.js?v=1"></script>
     <script src="ads.js?v=1"></script>
     <script src="bi.js?v=2"></script>
-    <script src="navigation.js?v=1"></script>
+    <script src="navigation.js?v=2"></script>
     <script src="tenants.js?v=2"></script>
     <script src="orders.js?v=4"></script>
     <script src="order-management.js?v=1"></script>
     <script src="admin-warnings.js?v=1"></script>
     <script src="vendor-settings.js?v=1"></script>
-    <script src="app.js?v=1"></script>
+    <script src="notifications.js?v=1"></script>
+    <script src="app.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->
     <script>

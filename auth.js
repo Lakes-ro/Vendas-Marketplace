@@ -1,15 +1,15 @@
 /**
- * AUTH.JS v8.1
+ * AUTH.JS v8.3
  * ✅ Botão de logout mostra avatar, nome, email e role do usuário logado
  * ✅ Bottom nav sincronizado
  * ✅ loginDirect / signupDirect / resetPasswordDirect
  * ✅ Logout limpa StoreStatus interval
- * ✅ v8.1: 'ads-nav-btn' (ANÚNCIOS) removido do vendedor — agora é
- *    exclusivo do Admin Supremo. Vendedor continua com 'ads-requests-nav-btn'
- *    (SOLICITAÇÕES), que é o fluxo correto pra ele.
- * ✅ v8.1: 'bi-nav-btn' (BI) liberado também pro vendedor — o bi.js
- *    escopa os dados automaticamente conforme o role (vendedor só vê o
- *    próprio desempenho, não o da loja inteira).
+ * ✅ 'ads-nav-btn' exclusivo do Admin Supremo; vendedor usa 'ads-requests-nav-btn'
+ * ✅ 'bi-nav-btn' liberado pro vendedor — bi.js escopa os dados por role
+ * ✅ Botão de conta abre cartão de perfil (nome, role, email, telefone)
+ * ✅ v8.3 NOVO: logout agora também encerra a escuta em tempo real de
+ *    notificações de venda (Notifications.teardown()), evitando que a
+ *    assinatura Realtime continue ativa depois que o usuário saiu.
  */
 
 const Auth = {
@@ -108,8 +108,6 @@ const Auth = {
             show('logout-btn');
             log('👑 UI: ADMIN SUPREMO', 'success');
         } else if (this.role === 'seller') {
-            // ✅ v8.1: 'ads-nav-btn' removido — ANÚNCIOS é exclusivo do Admin.
-            // ✅ v8.1: 'bi-nav-btn' adicionado — vendedor vê o próprio BI.
             ['seller-nav-btn','bi-nav-btn','ads-requests-nav-btn','vendor-settings-nav-btn'].forEach(show);
             hide('login-btn');
             show('logout-btn');
@@ -123,10 +121,7 @@ const Auth = {
             log('🚫 UI: ANÔNIMO', 'info');
         }
 
-        // Atualiza conteúdo do botão de logout com info do usuário
         this._updateLogoutButton();
-
-        // Bottom nav
         this._syncBottomNav();
     },
 
@@ -138,7 +133,6 @@ const Auth = {
         if (!logoutBtn) return;
 
         if (!this.session) {
-            // Botão volta ao estado padrão (hidden de qualquer forma)
             logoutBtn.innerHTML = `
                 <i data-lucide="log-out" class="flex-shrink-0"></i>
                 <span class="hidden lg:block">Sair</span>`;
@@ -152,24 +146,19 @@ const Auth = {
         const meta   = this.ROLE_LABELS[role] || this.ROLE_LABELS.client;
         const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
-        // Avatar com iniciais + info (desktop mostra completo, mobile só ícone)
         logoutBtn.innerHTML = `
-            <!-- Avatar (sempre visível) -->
             <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-white"
                  style="background: linear-gradient(135deg, ${meta.color}, ${meta.color}99);">
                 ${initials}
             </div>
-            <!-- Info do usuário (só no desktop) -->
             <div class="hidden lg:flex flex-col items-start min-w-0 flex-1">
                 <span class="font-bold text-xs text-white truncate max-w-[130px]">${name}</span>
                 <span class="text-[10px] truncate max-w-[130px]" style="color:${meta.color}">
                     ${meta.icon} ${meta.label}
                 </span>
             </div>
-            <!-- Ícone de sair (sempre visível) -->
             <i data-lucide="log-out" class="flex-shrink-0 w-4 h-4 text-slate-400 hidden lg:block"></i>`;
 
-        // Tooltip no mobile com nome + role
         logoutBtn.title = `${name} · ${meta.label} · Clique para sair`;
 
         if (window.lucide) lucide.createIcons();
@@ -177,10 +166,10 @@ const Auth = {
 
     _syncBottomNav() {
         const roleMap = {
-            'bnav-bi':      ['seller', 'supreme'], // ✅ v8.1: vendedor também vê BI no mobile
+            'bnav-bi':      ['seller', 'supreme'],
             'bnav-admin':   ['supreme'],
             'bnav-seller':  ['seller', 'supreme'],
-            'bnav-ads':     ['supreme'], // ✅ v8.1: ANÚNCIOS exclusivo do Admin
+            'bnav-ads':     ['supreme'],
             'bnav-tenants': ['supreme'],
             'bnav-ads-requests':    ['seller'],
             'bnav-vendor-settings': ['seller'],
@@ -200,7 +189,6 @@ const Auth = {
             if (bnavLogin)  bnavLogin.classList.add('hidden');
             if (bnavLogout) {
                 bnavLogout.classList.remove('hidden');
-                // Atualiza tooltip e texto no bottom nav mobile
                 const name = this.profile?.full_name || this.session?.user?.email?.split('@')[0] || '';
                 const meta = this.ROLE_LABELS[this.role] || this.ROLE_LABELS.client;
                 bnavLogout.title = `${name} · ${meta.label}`;
@@ -239,6 +227,52 @@ const Auth = {
     closeAuthModal() {
         const modal = document.getElementById('auth-modal');
         if (modal) modal.classList.add('hidden');
+    },
+
+    // ── Modal Perfil ─────────────────────────────────────────
+    openProfileModal() {
+        if (!this.session) {
+            this.openAuthModal('login');
+            return;
+        }
+        this._populateProfileModal();
+        const modal = document.getElementById('profile-modal');
+        if (modal) modal.classList.remove('hidden');
+    },
+    closeProfileModal() {
+        const modal = document.getElementById('profile-modal');
+        if (modal) modal.classList.add('hidden');
+    },
+    _populateProfileModal() {
+        const name  = this.profile?.full_name || this.session?.user?.email?.split('@')[0] || 'Usuário';
+        const email = this.profile?.email || this.session?.user?.email || '—';
+        const phone = this.profile?.phone || '—';
+        const role  = this.role || 'client';
+        const meta  = this.ROLE_LABELS[role] || this.ROLE_LABELS.client;
+        const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+        const avatarEl = document.getElementById('profile-modal-avatar');
+        if (avatarEl) {
+            avatarEl.textContent = initials;
+            avatarEl.style.background = `linear-gradient(135deg, ${meta.color}, ${meta.color}99)`;
+        }
+
+        const nameEl = document.getElementById('profile-modal-name');
+        if (nameEl) nameEl.textContent = name;
+
+        const roleEl = document.getElementById('profile-modal-role');
+        if (roleEl) {
+            roleEl.textContent = `${meta.icon} ${meta.label}`;
+            roleEl.style.color = meta.color;
+        }
+
+        const emailEl = document.getElementById('profile-modal-email');
+        if (emailEl) emailEl.textContent = email;
+
+        const phoneEl = document.getElementById('profile-modal-phone');
+        if (phoneEl) phoneEl.textContent = phone;
+
+        if (window.lucide) lucide.createIcons();
     },
 
     _setActiveTab(active) {
@@ -341,6 +375,10 @@ const Auth = {
             if (window.APP?.storeStatus?.checkInterval) {
                 clearInterval(window.APP.storeStatus.checkInterval);
                 window.APP.storeStatus.checkInterval = null;
+            }
+            // ✅ NOVO (v8.3): encerra a escuta em tempo real de vendas
+            if (window.APP?.notifications?.teardown) {
+                window.APP.notifications.teardown();
             }
             this.renderUIByRole();
             window.APP?.navigation?.showTab('market');

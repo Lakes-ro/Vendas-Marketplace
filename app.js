@@ -1,10 +1,11 @@
 /**
- * APP.JS v5.1
+ * APP.JS v5.2
  * ✅ Navigation.init() chamado corretamente (registra event listeners)
  * ✅ Removidas dependências de arquivos inexistentes
  * ✅ try/catch em cada módulo para não propagar falhas
- * ✅ Removida referência ao admin.js (era código de outro projeto)
  * ✅ Adicionado VendorSettings (Status da Loja via Supabase)
+ * ✅ v5.2 NOVO: Notifications — avisa o vendedor em tempo real quando um
+ *    produto dele é vendido (toast + selo no botão BI)
  */
 
 const APP = {
@@ -18,10 +19,11 @@ const APP = {
     orders: null,
     tenants: null,
     vendorSettings: null,
+    notifications: null,
 
     async init() {
         try {
-            log('🚀 Inicializando APP v5.1...', 'info');
+            log('🚀 Inicializando APP v5.2...', 'info');
 
             if (!window._supabase) {
                 throw new Error('Supabase não disponível — verifique o CDN antes de config.js');
@@ -97,10 +99,18 @@ const APP = {
             // 10. ORDERS
             window.APP.orders = Orders;
 
-            // 11. Renderizar ícones Lucide
+            // 11. ✅ NOVO: NOTIFICATIONS (aviso de venda em tempo real)
+            window.APP.notifications = Notifications;
+            try {
+                window.APP.notifications.init();
+            } catch (notifErr) {
+                log(`⚠️ Notifications.init falhou: ${notifErr.message}`, 'warning');
+            }
+
+            // 12. Renderizar ícones Lucide
             if (window.lucide) lucide.createIcons();
 
-            log('✅ APP v5.1 inicializado com sucesso!', 'success');
+            log('✅ APP v5.2 inicializado com sucesso!', 'success');
 
         } catch (err) {
             log(`❌ Erro crítico: ${err.message}`, 'error');
