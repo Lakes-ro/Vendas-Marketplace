@@ -107,7 +107,14 @@ const APP = {
                 log(`⚠️ Notifications.init falhou: ${notifErr.message}`, 'warning');
             }
 
-            // 12. Renderizar ícones Lucide
+            // 12. ✅ NOVO: PWA INSTALL (banner de instalar na tela inicial)
+            try {
+                PwaInstall.init();
+            } catch (pwaErr) {
+                log(`⚠️ PwaInstall.init falhou: ${pwaErr.message}`, 'warning');
+            }
+
+            // 13. Renderizar ícones Lucide
             if (window.lucide) lucide.createIcons();
 
             log('✅ APP v5.2 inicializado com sucesso!', 'success');
