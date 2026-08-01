@@ -1,7 +1,7 @@
 {
-  "name": "Fadvendas - Marketplace e BI",
-  "short_name": "Fadvendas",
-  "description": "ERP e E-commerce com BI integrado",
+  "name": "Estação Ityrapuan - Marketplace e BI",
+  "short_name": "Ityrapuan",
+  "description": "Marketplace comunitário com BI integrado",
   "start_url": "./index.html",
   "id": "/index.html",
   "display": "standalone",

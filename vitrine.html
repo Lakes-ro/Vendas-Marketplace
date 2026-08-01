@@ -5,17 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0a0e27">
     <meta name="description" content="Vitrine de Produtos - Compre Agora">
-    <title>Vitrine de Produtos</title>
+    <title>Vitrine | Estação Ityrapuan</title>
 
     <!-- CSS -->
     <link rel="stylesheet" href="style-vitrine.css">
+    <!-- ✅ mata qualquer Service Worker antigo + limpa todos os caches. -->
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(reg => reg.unregister());
+        });
+    }
+    if ('caches' in window) {
+        caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+        });
+    }
+</script>
 </head>
 <body>
     <div class="app-container">
 
         <!-- HEADER -->
         <header class="header">
-            <h1 class="header-title">💰 Nossa Vitrine</h1>
+            <h1 class="header-title">🚉 Estação Ityrapuan</h1>
             <button class="header-menu-btn" onclick="toggleMobileMenu()">☰</button>
         </header>
 
@@ -23,7 +36,6 @@
         <main>
             <!-- GRID DE PRODUTOS -->
             <div id="product-grid">
-                <!-- Produtos serão carregados aqui via JS -->
                 <div class="empty-state" style="grid-column: 1 / -1;">
                     <p style="font-size: 1rem; color: #a0a0b0;">Carregando produtos...</p>
                 </div>
@@ -38,28 +50,23 @@
     <div id="checkout-modal" class="modal">
         <div class="modal-content">
 
-            <!-- HEADER DO MODAL -->
             <div class="modal-header">
                 <h2 class="modal-title">🛒 Finalizar Compra</h2>
                 <button class="modal-close" onclick="closeCheckoutModal()">✕</button>
             </div>
 
-            <!-- INFORMAÇÕES DO PRODUTO -->
             <div class="checkout-product-info">
                 <p style="color: #a0a0b0; font-size: 0.875rem; margin-bottom: 6px;">PRODUTO SELECIONADO</p>
                 <h3 class="product-name" id="checkout-product-name">Nome do Produto</h3>
                 <p class="product-price-checkout" id="checkout-product-price">R$ 0,00</p>
             </div>
 
-            <!-- TÍTULO DO FORMULÁRIO -->
             <h1 style="font-size: 1.125rem; font-weight: 700; margin-bottom: var(--spacing-md); text-align: center;">
                 Para identificarmos você, precisamos de:
             </h1>
 
-            <!-- FORMULÁRIO -->
             <form class="checkout-form" id="checkout-form" onsubmit="handleCheckout(event)">
 
-                <!-- CAMPO: NOME -->
                 <div class="form-group">
                     <label for="checkout-name" class="form-label">📝 Seu Nome *</label>
                     <input 
@@ -71,7 +78,6 @@
                         autocomplete="name">
                 </div>
 
-                <!-- CAMPO: CURSO -->
                 <div class="form-group">
                     <label for="checkout-curso" class="form-label">🎓 Seu Curso/Turma *</label>
                     <input 
@@ -83,7 +89,6 @@
                         autocomplete="off">
                 </div>
 
-                <!-- CAMPO: WHATSAPP -->
                 <div class="form-group">
                     <label for="checkout-whatsapp" class="form-label">💬 WhatsApp para Contato *</label>
                     <input 
@@ -99,13 +104,11 @@
                     </small>
                 </div>
 
-                <!-- CAMPO HIDDEN: ID DO PRODUTO -->
                 <input 
                     id="checkout-product-id" 
                     type="hidden" 
                     value="">
 
-                <!-- BOTÕES -->
                 <div class="modal-actions">
                     <button 
                         type="button" 
@@ -127,19 +130,14 @@
     </div>
 
     <!-- ================================================
-         SCRIPTS — ORDEM IMPORTA:
-         1) SDK do Supabase (CDN)
-         2) config.js — cria window._supabase com as mesmas
-            credenciais do marketplace principal (products/profiles)
-         3) script-vitrine.js — usa window._supabase
+         SCRIPTS — ORDEM IMPORTA
+         ✅ ?v= adicionado pra garantir que ninguém fique com versão
+         antiga em cache depois de correções de segurança.
          ================================================ -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js"></script>
-    <script src="script-vitrine.js"></script>
+    <script src="config.js?v=3"></script>
+    <script src="script-vitrine.js?v=2"></script>
     <script>
-        /**
-         * Toggle menu mobile (futura expansão)
-         */
         function toggleMobileMenu() {
             console.log('Menu mobile');
         }

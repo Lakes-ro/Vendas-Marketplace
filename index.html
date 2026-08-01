@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0b0f1a">
-    <meta name="description" content="FadVendas - ERP & E-commerce com BI integrado">
-    <title>Vendas | Business Intelligence</title>
+    <meta name="description" content="Estação Ityrapuan - Marketplace com BI integrado">
+    <title>Estação Ityrapuan | Business Intelligence</title>
 
     <!-- ✅ mata qualquer Service Worker antigo + limpa todos os caches.
          Resolve o bug de "preciso limpar cache toda vez que troco de conta"
@@ -70,284 +70,10 @@
          SIDEBAR NAVEGAÇÃO
          ======================================== -->
     <aside class="app-sidebar border-r border-slate-800/50 p-4 flex flex-col sticky top-0 h-screen bg-[#0b0f1a] z-40">
-        <div class="text-blue-500 font-black text-xl mb-10 italic tracking-tighter text-center lg:text-left uppercase">Vendas</div>
-
-        <nav class="flex-1 space-y-2">
-            <!-- LOJA - Sempre visível -->
-            <button class="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="market">
-                <i data-lucide="shopping-bag" class="flex-shrink-0"></i>
-                <span class="block font-bold text-sm group-hover:text-white">LOJA</span>
-            </button>
-
-            <!-- BI - Vendedor / Supremo -->
-            <button id="bi-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="bi">
-                <i data-lucide="bar-chart-3" class="flex-shrink-0 text-green-500"></i>
-                <span class="block font-bold text-sm group-hover:text-white">BI / GESTÃO</span>
-            </button>
-
-            <!-- ADMIN - Apenas Admin Supremo -->
-            <button id="admin-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="admin">
-                <i data-lucide="shield-alert" class="flex-shrink-0 text-red-500"></i>
-                <span class="block font-bold text-sm text-red-500 group-hover:text-red-400">ADMIN</span>
-            </button>
-
-            <!-- ESTOQUE - Apenas Vendedor -->
-            <button id="seller-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="seller">
-                <i data-lucide="package" class="flex-shrink-0 text-blue-500"></i>
-                <span class="block font-bold text-sm text-blue-500 group-hover:text-blue-400">ESTOQUE</span>
-            </button>
-
-            <!-- ANÚNCIOS - Apenas Supremo -->
-            <button id="ads-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="ads">
-                <i data-lucide="megaphone" class="flex-shrink-0 text-yellow-500"></i>
-                <span class="block font-bold text-sm text-yellow-500 group-hover:text-yellow-400">ANÚNCIOS</span>
-            </button>
-
-            <!-- SOLICITAÇÕES DE ANÚNCIO - Apenas Vendedor -->
-            <button id="ads-requests-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="ads-requests">
-                <i data-lucide="mail" class="flex-shrink-0 text-orange-500"></i>
-                <span class="block font-bold text-sm text-orange-500 group-hover:text-orange-400">SOLICITAÇÕES</span>
-            </button>
-
-            <!-- STATUS DA LOJA - Apenas Vendedor -->
-            <button id="vendor-settings-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="vendor-settings">
-                <i data-lucide="settings" class="flex-shrink-0 text-cyan-500"></i>
-                <span class="block font-bold text-sm text-cyan-500 group-hover:text-cyan-400">STATUS DA LOJA</span>
-            </button>
-
-            <!-- VENDEDORES - Apenas Supremo -->
-            <button id="tenants-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="tenants">
-                <i data-lucide="building-2" class="flex-shrink-0 text-purple-500"></i>
-                <span class="block font-bold text-sm text-purple-500 group-hover:text-purple-400">VENDEDORES</span>
-            </button>
-        </nav>
-
-        <!-- BOTÕES DE AÇÃO -->
-        <div class="flex flex-col gap-2 mt-auto">
-            <!-- Carrinho -->
-            <button class="relative p-4 bg-blue-600 rounded-2xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 group" data-action="toggle-cart">
-                <i data-lucide="shopping-cart" class="text-white flex-shrink-0"></i>
-                <span id="cart-count" class="absolute -top-1 -right-1 bg-white text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full font-black">0</span>
-                <span class="block text-white font-bold text-xs">CARRINHO</span>
-            </button>
-
-            <!-- Login (anônimo) -->
-            <button id="login-btn"
-                class="w-full flex items-center gap-2 p-4 rounded-2xl bg-green-600 hover:bg-green-500 text-white font-bold text-xs uppercase transition-all justify-center lg:justify-start"
-                data-action="open-login">
-                <i data-lucide="log-in" class="flex-shrink-0"></i>
-                <span class="block">Entrar</span>
-            </button>
-
-            <!-- Conta (logado) -->
-            <button id="logout-btn"
-                class="w-full hidden flex items-center gap-3 p-3 rounded-2xl border border-white/5 text-slate-400 font-bold text-xs transition-all justify-center lg:justify-start"
-                data-action="open-profile"
-                title="Ver perfil">
-                <i data-lucide="log-out" class="flex-shrink-0"></i>
-                <span class="block">Sair</span>
-            </button>
-
-            <!-- ✅ Link discreto pra Política de Privacidade -->
-            <a href="privacidade.html" class="w-full text-center text-[10px] text-slate-600 hover:text-slate-400 font-bold py-1 transition-all hidden lg:block">
-                Política de Privacidade
-            </a>
+        <div class="mb-10 text-center lg:text-left leading-none">
+            <div class="text-blue-500 font-black text-xl italic tracking-tighter uppercase">Ityrapuan</div>
+            <span class="text-slate-500 text-[9px] font-bold uppercase tracking-widest">Estação Marketplace</span>
         </div>
-    </aside>
-
-    <!-- ========================================
-         CONTEÚDO PRINCIPAL
-         ======================================== -->
-    <main class="flex-1 p-6 overflow-x-hidden">
-
-        <!-- ===== MARKETPLACE / LOJA ===== -->
-        <section id="market-section" class="animate-in">
-            <div id="ads-hero"
-                 class="mb-12 w-full h-48 bg-slate-900 rounded-[32px] relative border border-white/5 overflow-hidden shadow-2xl cursor-pointer group">
-                <img id="hero-ads-img" class="w-full h-full object-cover group-hover:scale-105 transition-transform" alt="Anúncio" />
-                <div id="hero-ads-fallback" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800"></div>
-            </div>
-            <h2 class="text-3xl font-black mb-6">Marketplace</h2>
-            <div id="product-grid" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
-        </section>
-
-        <!-- ===== BI DASHBOARD ===== -->
-<section id="bi-section" class="hidden animate-in">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 id="bi-main-title" class="text-3xl font-black text-green-500">DASHBOARD BI</h2>
-        <div class="flex items-center gap-3 flex-wrap">
-            <span id="bi-period-label" class="text-xs font-bold text-slate-400 uppercase tracking-wide"></span>
-            <button onclick="window.print()" class="no-print bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-3 rounded-lg transition-all">
-                🖨️ Imprimir / PDF
-            </button>
-        </div>
-    </div>
-
-    <div class="flex flex-wrap gap-2 mb-6">
-        <button class="bi-period-btn" data-period="hoje" onclick="window.APP.bi.setPeriod('hoje')">Hoje</button>
-        <button class="bi-period-btn" data-period="ontem" onclick="window.APP.bi.setPeriod('ontem')">Ontem</button>
-        <button class="bi-period-btn" data-period="7dias" onclick="window.APP.bi.setPeriod('7dias')">7 dias</button>
-        <button class="bi-period-btn" data-period="mes" onclick="window.APP.bi.setPeriod('mes')">Este mês</button>
-        <button class="bi-period-btn" data-period="mes_passado" onclick="window.APP.bi.setPeriod('mes_passado')">Mês passado</button>
-        <button class="bi-period-btn" data-period="tudo" onclick="window.APP.bi.setPeriod('tudo')">Tudo</button>
-    </div>
-
-    <!-- ✅ NOVO: Resumo Executivo — em texto, pra qualquer pessoa entender
-         o cenário sem precisar interpretar gráfico nenhum -->
-    <div id="bi-executive-summary" class="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-5 mb-8 text-sm text-blue-100 leading-relaxed">
-        Carregando resumo...
-    </div>
-
-    <!-- ✅ NOVO: DRE Simplificado — mesmo relatório que um contador monta -->
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-black text-slate-300">🧾 Demonstrativo de Resultado (DRE Simplificado)</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-dre')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-        </div>
-        <p id="info-dre" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">É o mesmo relatório que um contador monta pra mostrar se o negócio deu lucro ou prejuízo no período: quanto entrou, quanto custou o que foi vendido, e o que sobrou de verdade.</p>
-        <div id="bi-dre" class="space-y-1"></div>
-    </div>
-
-    <!-- ✅ NOVO: cada card agora tem comparação com o período anterior
-         (▲/▼) e um botão "ⓘ" que explica a métrica pra quem não conhece -->
-    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">FATURAMENTO</div>
-                <button onclick="window.APP.bi.toggleInfo('info-revenue')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-revenue" class="text-3xl font-black text-green-500">R$ 0,00</div>
-            <div id="bi-revenue-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-revenue" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Soma de tudo que foi vendido no período, mesmo o que ainda não foi confirmado o pagamento.</p>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">LUCRO</div>
-                <button onclick="window.APP.bi.toggleInfo('info-profit')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-profit" class="text-3xl font-black text-blue-500">R$ 0,00</div>
-            <div id="bi-profit-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-profit" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Faturamento menos o custo dos produtos vendidos (o que sobra de verdade no bolso).</p>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">MARGEM</div>
-                <button onclick="window.APP.bi.toggleInfo('info-margin')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-margin" class="text-3xl font-black text-yellow-500">0%</div>
-            <div id="bi-margin-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-margin" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Quanto do faturamento vira lucro. Ex: margem de 30% significa que, de cada R$ 100 vendidos, R$ 30 é lucro.</p>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">TICKET MÉDIO</div>
-                <button onclick="window.APP.bi.toggleInfo('info-ticket')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-ticket-medio" class="text-3xl font-black text-pink-400">R$ 0,00</div>
-            <div id="bi-ticket-medio-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-ticket" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Valor médio gasto por pedido (faturamento ÷ número de pedidos). Ajuda a saber se as pessoas estão comprando mais ou menos por vez.</p>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">PEDIDOS</div>
-                <button onclick="window.APP.bi.toggleInfo('info-orders')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-orders" class="text-3xl font-black text-purple-500">0</div>
-            <div id="bi-orders-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-orders" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Quantidade de pedidos fechados no período (não importa quantos itens tinha em cada um).</p>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-slate-500 text-xs uppercase font-black">ITENS VENDIDOS</div>
-                <button onclick="window.APP.bi.toggleInfo('info-items')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-            </div>
-            <div id="bi-items-sold" class="text-3xl font-black text-cyan-400">0</div>
-            <div id="bi-items-sold-delta" class="text-xs font-bold mt-1"></div>
-            <p id="info-items" class="hidden text-[11px] text-slate-500 mt-2 leading-relaxed">Soma de unidades vendidas (2 pedidos de 3 itens cada = 6 itens vendidos).</p>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5">
-            <h3 id="bi-revenue-chart-title" class="text-lg font-black text-slate-300 mb-4">📈 Faturamento</h3>
-            <div style="height:300px"><canvas id="chart-revenue"></canvas></div>
-        </div>
-        <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5">
-            <h3 class="text-lg font-black text-slate-300 mb-4">🏆 Top Produtos</h3>
-            <div style="height:220px"><canvas id="chart-products"></canvas></div>
-            <div id="chart-products-legend" class="chart-legend-list"></div>
-        </div>
-    </div>
-
-    <!-- ✅ NOVO: Curva ABC — quais produtos realmente sustentam o negócio -->
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-lg font-black text-slate-300">🎯 Curva ABC de Produtos</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-abc')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-        </div>
-        <p id="info-abc" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">
-            Classifica os produtos pelo quanto cada um contribui pro faturamento. <strong class="text-white">Classe A</strong> = poucos produtos que sustentam a maior parte da receita (nunca deixe faltar estoque deles). <strong class="text-white">Classe B</strong> = contribuição intermediária. <strong class="text-white">Classe C</strong> = contribuem pouco — avalie se vale continuar tendo em estoque.
-        </p>
-        <div id="bi-abc-table" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
-        </div>
-    </div>
-
-    <!-- ✅ NOVO: Ranking de Vendedores — só aparece pro Admin Supremo -->
-    <div id="bi-vendor-ranking-wrapper" class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 hidden">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-lg font-black text-slate-300">🏆 Ranking de Vendedores</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-ranking')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-        </div>
-        <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
-        <div id="bi-vendor-ranking" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
-        </div>
-    </div>
-
-    <!-- ✅ NOVO: Estoque Crítico — igual um almoxarifado de verdade -->
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-lg font-black text-red-400">⚠️ Estoque Crítico</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-stock')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-        </div>
-        <p id="info-stock" class="hidden text    <link rel="stylesheet" href="style.css?v=4">
-
-    <!-- TAILWIND CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- CHART.JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-
-    <!-- SUPABASE JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- LUCIDE ICONS -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-
-    <style>
-        #ad-form-text textarea { font-family: 'Inter', sans-serif; }
-        #preview-title { word-break: break-word; }
-        #preview-text  { word-break: break-word; white-space: pre-wrap; }
-
-        /* Botão de logout com info do usuário */
-        #logout-btn {
-            min-height: 56px;
-            align-items: center;
-        }
-        #logout-btn:hover {
-            background: rgba(239,68,68,0.1);
-            border-color: rgba(239,68,68,0.3);
-        }
-    </style>
-</head>
-<body class="bg-[#0b0f1a] text-slate-200 flex min-h-screen font-sans overflow-x-hidden">
-
-    <!-- ========================================
-         SIDEBAR NAVEGAÇÃO
-         ======================================== -->
-    <aside class="app-sidebar border-r border-slate-800/50 p-4 flex flex-col sticky top-0 h-screen bg-[#0b0f1a] z-40">
-        <div class="text-blue-500 font-black text-xl mb-10 italic tracking-tighter text-center lg:text-left uppercase">Vendas</div>
 
         <nav class="flex-1 space-y-2">
             <!-- LOJA - Sempre visível -->
@@ -753,6 +479,23 @@
         <!-- ===== VENDOR SETTINGS (STATUS DA LOJA) ===== -->
         <section id="vendor-settings-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-cyan-500">⚙️ STATUS DA LOJA</h2>
+
+            <!-- ✅ NOVO: Fechamento de Emergência — só aparece pro Admin Supremo -->
+            <div id="global-store-override-section" class="bg-slate-900/50 p-6 rounded-2xl border border-red-500/30 mb-6 hidden">
+                <h3 class="text-lg font-black text-red-400 mb-2">🚨 Fechar a Loja Inteira</h3>
+                <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                    Isso fecha o marketplace <strong class="text-slate-300">INTEIRO</strong>, pra todos os vendedores, imediatamente
+                    — sobrepõe até o horário automático (Sabbath/noturno). Use só em emergência (imprevisto, manutenção, etc).
+                    Fica fechado até você mesmo reabrir aqui.
+                </p>
+                <div id="global-override-status" class="mb-4 p-3 bg-white/5 rounded-lg text-sm">
+                    Carregando...
+                </div>
+                <button id="global-override-toggle-btn" onclick="window.APP.vendorSettings.toggleGlobalOverride()" class="w-full py-3 rounded-xl font-black text-white transition-all">
+                    Carregando...
+                </button>
+            </div>
+
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
                 <h3 class="text-lg font-black text-slate-300 mb-4">Status Atual</h3>
                 <button id="vendor-status-main-toggle" class="w-full py-4 px-6 rounded-xl font-bold text-white mb-4 transition-all" style="background:#22c55e;">
@@ -1031,23 +774,23 @@
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
          ======================================== -->
-    <script src="config.js?v=2"></script>
-    <script src="storage.js?v=1"></script>
+    <script src="config.js?v=3"></script>
+    <script src="storage.js?v=2"></script>
     <script src="wrapper.js?v=1"></script>
     <script src="auth.js?v=4"></script>
-    <script src="store-status.js?v=1"></script>
+    <script src="store-status.js?v=2"></script>
     <script src="cart.js?v=1"></script>
     <script src="products.js?v=3"></script>
     <script src="ads.js?v=4"></script>
     <script src="bi.js?v=5"></script>
     <script src="navigation.js?v=2"></script>
-    <script src="tenants.js?v=3"></script>
+    <script src="tenants.js?v=4"></script>
     <script src="orders.js?v=5"></script>
     <script src="order-management.js?v=2"></script>
     <script src="admin-warnings.js?v=2"></script>
-    <script src="vendor-settings.js?v=1"></script>
+    <script src="vendor-settings.js?v=3"></script>
     <script src="notifications.js?v=1"></script>
-    <script src="pwa-install.js?v=1"></script>
+    <script src="pwa-install.js?v=2"></script>
     <script src="app.js?v=3"></script>
 
     <!-- Preview em tempo real do anúncio texto -->

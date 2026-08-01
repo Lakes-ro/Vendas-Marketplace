@@ -13,7 +13,7 @@
 
 const PwaInstall = {
     deferredPrompt: null,
-    DISMISS_KEY: 'fadvendas_pwa_install_dismissed_at',
+    DISMISS_KEY: 'ityrapuan_pwa_install_dismissed_at',
     DISMISS_DAYS: 7,
 
     init() {
@@ -76,7 +76,7 @@ const PwaInstall = {
         banner.innerHTML = `
             <div class="pwa-install-icon">📲</div>
             <div class="pwa-install-text">
-                <strong>Instale o app da Vendas</strong>
+                <strong>Instale o app da Estação Ityrapuan</strong>
                 <span>Acesso rápido direto da tela inicial, sem precisar abrir o navegador.</span>
             </div>
             <div class="pwa-install-actions">
@@ -145,7 +145,7 @@ const PwaInstall = {
             <div class="pwa-instructions-content">
                 <button class="pwa-instructions-close" aria-label="Fechar">✕</button>
                 <div class="pwa-instructions-icon">📲</div>
-                <h3>Instalar o app da Vendas</h3>
+                <h3>Instalar o app da Estação Ityrapuan</h3>
                 <p class="pwa-instructions-note">O Safari não deixa instalar automaticamente — mas é rapidinho fazer manual:</p>
                 ${steps}
             </div>

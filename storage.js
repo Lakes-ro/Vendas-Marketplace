@@ -1,11 +1,12 @@
 /**
- * STORAGE.JS
+ * STORAGE.JS v1.1
  * Gerencia persistência de dados locais
+ * ✅ v1.1: prefixo do localStorage renomeado de 'fadvendas_' pra
+ *    'ityrapuan_', acompanhando o rebranding do sistema.
  */
 
 const Storage = {
-    // Prefixo para evitar colisões
-    PREFIX: 'fadvendas_',
+    PREFIX: 'ityrapuan_',
 
     /**
      * Salva dados no localStorage
