@@ -1,16 +1,48 @@
 /**
- * CART.JS v2.1
+ * CART.JS v2.2
  * Gerencia carrinho de compras
  * ✅ v2.0: feedback visual ao adicionar item — toast + bounce
  * ✅ v2.1: valores em R$ agora usam window.formatBRL() (padrão brasileiro)
+ * ✅ v2.2 NOVO: botão "voltar" do celular agora FECHA o carrinho em vez de
+ *    sair do app/PWA. Como o carrinho é uma gaveta sobreposta (não uma
+ *    página nova), o navegador não sabia que devia só fechá-la — ele
+ *    tratava o "voltar" como navegação normal e saía do sistema. Agora,
+ *    ao abrir o carrinho, empilhamos uma entrada de histórico; ao fechar
+ *    (pelo X ou pelo botão voltar do telefone), essa entrada é consumida
+ *    sem sair da página, e o usuário volta a ver os produtos por trás.
  */
 
 const Cart = {
     items: [],
+    _cartHistoryPushed: false,
+    _backHandlerAttached: false,
 
     init() {
         this.items = Storage.loadCart();
         this.updateUI();
+        this._attachBackButtonHandler();
+    },
+
+    /**
+     * ✅ NOVO (v2.2): escuta o evento popstate (disparado pelo botão
+     * "voltar" do navegador/celular). Se o carrinho estiver aberto na
+     * hora, só fecha a gaveta — não deixa o navegador sair da página.
+     */
+    _attachBackButtonHandler() {
+        if (this._backHandlerAttached) return;
+        this._backHandlerAttached = true;
+
+        window.addEventListener('popstate', () => {
+            if (this._cartHistoryPushed) {
+                this._cartHistoryPushed = false;
+                this._hideCartUI();
+            }
+        });
+    },
+
+    _hideCartUI() {
+        const drawer = document.getElementById('cart-drawer');
+        if (drawer) drawer.classList.add('translate-x-full');
     },
 
     add(productId, productName, price) {
@@ -111,19 +143,41 @@ const Cart = {
         if (window.lucide) lucide.createIcons();
     },
 
-    toggleCart() {
-        const drawer = document.getElementById('cart-drawer');
-        if (drawer) drawer.classList.toggle('translate-x-full');
-    },
-
-    closeCart() {
-        const drawer = document.getElementById('cart-drawer');
-        if (drawer) drawer.classList.add('translate-x-full');
-    },
-
+    /**
+     * ✅ v2.2: abrir o carrinho agora empilha uma entrada de histórico,
+     * pra que o botão "voltar" feche a gaveta em vez de sair do app.
+     */
     openCart() {
         const drawer = document.getElementById('cart-drawer');
         if (drawer) drawer.classList.remove('translate-x-full');
+
+        if (!this._cartHistoryPushed) {
+            history.pushState({ ityrapuanCartOpen: true }, '');
+            this._cartHistoryPushed = true;
+        }
+    },
+
+    /**
+     * ✅ v2.2: fechar pelo X consome a entrada de histórico empilhada
+     * (via history.back()), pra não deixar "lixo" na pilha que exigiria
+     * apertar voltar duas vezes depois.
+     */
+    closeCart() {
+        this._hideCartUI();
+
+        if (this._cartHistoryPushed) {
+            this._cartHistoryPushed = false;
+            history.back();
+        }
+    },
+
+    toggleCart() {
+        const drawer = document.getElementById('cart-drawer');
+        if (!drawer) return;
+
+        const isOpen = !drawer.classList.contains('translate-x-full');
+        if (isOpen) this.closeCart();
+        else this.openCart();
     },
 
     getTotal() {
