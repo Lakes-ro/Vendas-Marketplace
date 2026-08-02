@@ -1,16 +1,20 @@
 /**
- * PRODUCTS.JS v4.2
+ * PRODUCTS.JS v4.3
  * ✅ Removido código do script-vitrine.js que estava colado no final por engano
  * ✅ saveProductDirect() para botão onclick sem form
  * ✅ fetchAll() com filtro status=active
  * ✅ render() com try/catch completo
- * ✅ v4.1: produtos de vendedor offline (is_online = false em vendor_status)
+ * ✅ produtos de vendedor offline (is_online = false em vendor_status)
  *    aparecem marcados no marketplace, com o botão de compra desabilitado
- * ✅ v4.2: texto "Vendedor Indisponível" trocado para "Vendedor Offline"
- * ✅ v4.2 NOVO: botão "Falar com o Vendedor" no card do produto — usa o
- *    telefone salvo no perfil do vendedor (profiles.phone) pra abrir o
- *    WhatsApp direto. Some automaticamente se o vendedor não tiver
- *    telefone cadastrado.
+ * ✅ botão "Falar com o Vendedor" no card do produto — usa o telefone
+ *    salvo no perfil do vendedor (profiles.phone) pra abrir o WhatsApp
+ *    direto. Some automaticamente se o vendedor não tiver telefone
+ *    cadastrado.
+ * ✅ v4.3 FIX: o formulário de produto já tinha o campo "Estoque Mínimo"
+ *    (input #p-min-stock), mas ele nunca era buscado do banco nem salvo
+ *    — por isso o índice "Estoque Crítico" do BI não tinha como
+ *    funcionar de verdade. Agora min_stock é lido, salvo e editado
+ *    corretamente.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -31,6 +35,7 @@ const Products = {
                     price,
                     cost_price,
                     stock,
+                    min_stock,
                     description,
                     image_url,
                     owner_id,
@@ -116,7 +121,6 @@ const Products = {
                 const disponivel = estoque > 0 && vendorOnline;
                 const vendedor = p.profiles?.full_name || 'Vendedor';
 
-                // ✅ NOVO (v4.2): link do WhatsApp do vendedor, se ele tiver telefone salvo
                 const waLink = window.buildWhatsAppLink ? window.buildWhatsAppLink(p.profiles?.phone) : null;
 
                 return `
@@ -192,8 +196,8 @@ const Products = {
                         <span class="font-bold text-white block">${p.name}</span>
                         <span class="text-xs text-yellow-400 font-semibold mt-1">👤 ${p.profiles?.full_name || 'Desconhecido'}</span>
                         <span class="text-xs text-slate-500 mt-1 block">R$ ${window.formatBRL(p.price)}</span>
-                        <span class="text-xs ${p.stock > 10 ? 'text-green-500' : p.stock > 0 ? 'text-yellow-500' : 'text-red-500'} font-black mt-1 block">
-                            Estoque: ${p.stock}
+                        <span class="text-xs ${p.stock > (p.min_stock ?? 5) ? 'text-green-500' : p.stock > 0 ? 'text-yellow-500' : 'text-red-500'} font-black mt-1 block">
+                            Estoque: ${p.stock} <span class="text-slate-600 font-normal">(mín: ${p.min_stock ?? 5})</span>
                         </span>
                     </div>
                     <div class="flex gap-2">
@@ -244,7 +248,7 @@ const Products = {
 
                     <div class="flex justify-between items-center">
                         <div class="text-2xl font-black text-white">R$ ${window.formatBRL(p.price)}</div>
-                        <div class="text-xs font-bold text-slate-400">Estoque: ${p.stock}</div>
+                        <div class="text-xs font-bold text-slate-400">Estoque: ${p.stock} <span class="text-slate-600">(mín: ${p.min_stock ?? 5})</span></div>
                     </div>
 
                     <div class="flex gap-2">
@@ -288,6 +292,10 @@ const Products = {
                 if (el) el.value = '';
             });
 
+            // ✅ FIX v4.3: estoque mínimo tem valor padrão (5), não fica vazio
+            const minStockEl = document.getElementById('p-min-stock');
+            if (minStockEl) minStockEl.value = 5;
+
             const title = document.querySelector('#admin-modal h3');
             if (title) title.innerText = 'NOVO PRODUTO';
 
@@ -323,6 +331,10 @@ const Products = {
             document.getElementById('p-cost').value = product.cost_price || 0;
             document.getElementById('p-stock').value = product.stock || 0;
             document.getElementById('p-desc').value = product.description || '';
+
+            // ✅ FIX v4.3: agora carrega o estoque mínimo real do produto
+            const minStockEl = document.getElementById('p-min-stock');
+            if (minStockEl) minStockEl.value = product.min_stock ?? 5;
 
             const title = document.querySelector('#admin-modal h3');
             if (title) title.innerText = `✏️ EDITAR: ${product.name}`;
@@ -391,6 +403,8 @@ const Products = {
                 price,
                 cost_price: parseFloat(document.getElementById('p-cost')?.value) || 0,
                 stock: parseInt(document.getElementById('p-stock')?.value) || 0,
+                // ✅ FIX v4.3: estoque mínimo agora é salvo de verdade
+                min_stock: parseInt(document.getElementById('p-min-stock')?.value) || 5,
                 description: document.getElementById('p-desc')?.value?.trim() || '',
                 owner_id: window.APP.auth.userId,
                 active: true
