@@ -1,5 +1,5 @@
 /**
- * AUTH.JS v8.3
+ * AUTH.JS v8.4
  * ✅ Botão de logout mostra avatar, nome, email e role do usuário logado
  * ✅ Bottom nav sincronizado
  * ✅ loginDirect / signupDirect / resetPasswordDirect
@@ -7,9 +7,14 @@
  * ✅ 'ads-nav-btn' exclusivo do Admin Supremo; vendedor usa 'ads-requests-nav-btn'
  * ✅ 'bi-nav-btn' liberado pro vendedor — bi.js escopa os dados por role
  * ✅ Botão de conta abre cartão de perfil (nome, role, email, telefone)
- * ✅ v8.3 NOVO: logout agora também encerra a escuta em tempo real de
- *    notificações de venda (Notifications.teardown()), evitando que a
- *    assinatura Realtime continue ativa depois que o usuário saiu.
+ * ✅ logout também encerra a escuta em tempo real de notificações de venda
+ * ✅ v8.4 FIX CRÍTICO: o botão "🚀 QUERO VENDER" existia no HTML do cartão
+ *    de perfil, mas (1) nunca era exibido pra ninguém — ficava sempre
+ *    escondido — e (2) chamava becomeSeller(), uma função que nunca
+ *    tinha sido escrita neste arquivo. Ou seja: mesmo uma conta 'client'
+ *    clicando nesse botão, nada acontecia. Agora o botão aparece só pra
+ *    quem é 'client', e becomeSeller() de fato promove a própria conta a
+ *    vendedor.
  */
 
 const Auth = {
@@ -272,7 +277,56 @@ const Auth = {
         const phoneEl = document.getElementById('profile-modal-phone');
         if (phoneEl) phoneEl.textContent = phone;
 
+        // ✅ FIX v8.4: só mostra "QUERO VENDER" pra quem ainda é Cliente.
+        // Antes esse botão nunca aparecia pra ninguém, pra nenhum role.
+        const becomeSellerBtn = document.getElementById('profile-become-seller-btn');
+        if (becomeSellerBtn) {
+            if (role === 'client') becomeSellerBtn.classList.remove('hidden');
+            else becomeSellerBtn.classList.add('hidden');
+        }
+
         if (window.lucide) lucide.createIcons();
+    },
+
+    /**
+     * ✅ NOVO (v8.4): promove a PRÓPRIA conta de 'client' para 'seller'.
+     * Só funciona pra quem está logado como Cliente — vendedores e
+     * admins supremos não têm esse botão nem essa opção. Depois de
+     * promovido, o perfil é recarregado (pra liberar ESTOQUE/BI/etc na
+     * navegação) e a pessoa é levada direto pra aba de Estoque.
+     */
+    async becomeSeller() {
+        if (!this.session || !this.userId) {
+            alert('❌ Você precisa estar logado');
+            return;
+        }
+
+        if (this.role !== 'client') {
+            alert('ℹ️ Essa opção é só para contas Cliente.');
+            return;
+        }
+
+        if (!confirm('Deseja se tornar um Vendedor?\n\nVocê passará a poder cadastrar produtos, gerenciar estoque e ver seu próprio painel de BI.')) return;
+
+        try {
+            const { error } = await _supabase
+                .from('profiles')
+                .update({ role: 'seller' })
+                .eq('id', this.userId);
+
+            if (error) throw error;
+
+            log('✅ Conta promovida a vendedor', 'success');
+            alert('✅ Pronto! Agora você é um vendedor.');
+
+            this.closeProfileModal();
+            await this.init(); // recarrega perfil/role e re-renderiza a navegação
+
+            window.APP?.navigation?.showTab('seller');
+        } catch (err) {
+            log(`❌ Erro ao virar vendedor: ${err.message}`, 'error');
+            alert(`❌ Erro: ${err.message}\n\nSe o erro persistir, pode ser uma regra de segurança do banco (RLS) bloqueando essa troca — fale com o Admin Supremo.`);
+        }
     },
 
     _setActiveTab(active) {
@@ -376,7 +430,6 @@ const Auth = {
                 clearInterval(window.APP.storeStatus.checkInterval);
                 window.APP.storeStatus.checkInterval = null;
             }
-            // ✅ NOVO (v8.3): encerra a escuta em tempo real de vendas
             if (window.APP?.notifications?.teardown) {
                 window.APP.notifications.teardown();
             }
