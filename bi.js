@@ -1,18 +1,20 @@
 /**
- * BI.JS v9.1
+ * BI.JS v9.2
  * ✅ Gráfico "Top Produtos" com legenda HTML própria (v7.2)
  * ✅ Fallback de custo (unit_cost) via cost_price atual do produto (v7.1)
  * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp +
  *    valores desenhados nos gráficos (v8.0)
  * ✅ Formatação R$ no padrão brasileiro (v8.1)
  * ✅ BI escopado por role — vendedor só vê o próprio desempenho (v9.0)
- * ✅ v9.1 NOVO: detalhamento agora mostra a forma de pagamento, um badge
- *    "✔ Pago" ou "Aguardando pagamento", link "📎 Ver Comprovante" (quando
- *    o cliente anexou o comprovante Pix no checkout) e um botão "✔
- *    Confirmar Pagamento" — só pro Admin Supremo, já que o Pix cai numa
- *    conta centralizada, não na de cada vendedor individual. O banco
- *    (trigger + RLS) também impede qualquer outra pessoa de confirmar
- *    pagamento, mesmo chamando a API direto.
+ * ✅ Detalhamento mostra forma de pagamento, badge "✔ Pago"/"Aguardando",
+ *    link de comprovante e confirmação de pagamento (v9.1)
+ * ✅ v9.2 NOVO/FIX CRÍTICO: o HTML já tinha os cartões e seções de
+ *    Resumo Executivo, DRE, Ticket Médio, comparação ▲/▼ com o período
+ *    anterior, Curva ABC, Estoque Crítico, Giro de Estoque e Ranking de
+ *    Vendedores — mas as funções que preenchem esses elementos nunca
+ *    tinham sido escritas (regressão de uma versão anterior). Por isso
+ *    nenhum índice aparecia e os botões "ⓘ" não faziam nada (a função
+ *    toggleInfo() nem existia). Esta versão implementa tudo isso.
  */
 
 // ── Plugin custom de "data labels" (valores desenhados no próprio gráfico) ──
@@ -76,7 +78,8 @@ const BI = {
     _loadToken: 0,
     _allOrders: [],
     currentPeriod: null,
-    _viewRole: null, // ✅ NOVO: 'supreme' ou 'seller' — define escopo dos dados
+    _viewRole: null, // 'supreme' ou 'seller' — define escopo dos dados
+    _lastKPIs: null,
 
     _formatBRL(value, decimals = 2) {
         if (window.formatBRL) return window.formatBRL(value, decimals);
@@ -87,13 +90,21 @@ const BI = {
         });
     },
 
+    /**
+     * ✅ NOVO (v9.2): liga/desliga os parágrafos explicativos "ⓘ" de
+     * cada métrica. Sem isso, os botões de informação espalhados pelo
+     * dashboard não faziam absolutamente nada ao serem clicados.
+     */
+    toggleInfo(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden');
+    },
+
     async loadDashboard() {
         const token = ++this._loadToken;
         try {
             log('📊 Carregando BI Dashboard...', 'info');
 
-            // ✅ FIX v9.0: antes só supremo entrava. Agora vendedor também
-            // pode (isSeller() retorna true pra seller E supreme).
             if (!window.APP?.auth?.isSeller()) {
                 log('❌ Acesso negado ao BI', 'error');
                 return;
@@ -124,10 +135,6 @@ const BI = {
         }
     },
 
-    /**
-     * ✅ Consulta original — Admin Supremo vê TODOS os pedidos do
-     * marketplace, com todos os itens de todos os vendedores.
-     */
     async _fetchAdminOrders() {
         const { data, error } = await _supabase
             .from('orders')
@@ -156,12 +163,6 @@ const BI = {
         return data;
     },
 
-    /**
-     * ✅ NOVO (v9.0): Vendedor vê só os ITENS de pedidos que contêm produtos
-     * dele. Um mesmo pedido no banco pode ter itens de vários vendedores —
-     * aqui reconstruímos "pedidos" só com os itens do vendedor logado, e o
-     * total mostrado é só a fatia dele (nunca o pedido inteiro de terceiros).
-     */
     async _fetchSellerOrders() {
         const sellerId = window.APP.auth.userId;
         if (!sellerId) return [];
@@ -215,10 +216,6 @@ const BI = {
         );
     },
 
-    /**
-     * ✅ NOVO (v9.0): troca o título da seção conforme o role, pra deixar
-     * claro que o vendedor está vendo só o desempenho dele, não da loja toda.
-     */
     _updateHeaderForRole() {
         const titleEl = document.getElementById('bi-main-title');
         if (!titleEl) return;
@@ -240,9 +237,23 @@ const BI = {
             return d >= range.start && d <= range.end;
         });
 
+        // ✅ NOVO (v9.2): período anterior de mesma duração, pra calcular
+        // as setinhas ▲/▼ dos cartões e do resumo executivo.
+        const prevRange = this._getPreviousRange(range);
+        const prevFiltered = (this._allOrders || []).filter(o => {
+            const d = new Date(o.created_at);
+            return d >= prevRange.start && d <= prevRange.end;
+        });
+
         this._syncPeriodButtonsUI(range);
-        this.renderKPIs(filtered);
+        this.renderKPIs(filtered, prevFiltered);
+        this.renderExecutiveSummary(filtered, prevFiltered, range);
+        this.renderDRE(filtered);
         this.renderOrderList(filtered);
+        this.renderABC(filtered);
+        this.renderCriticalStock();
+        this.renderStockTurnover(filtered, range);
+        this.renderVendorRanking(filtered);
         await this.prepareCharts(filtered, token, range);
     },
 
@@ -290,6 +301,17 @@ const BI = {
         }
     },
 
+    /**
+     * ✅ NOVO (v9.2): período imediatamente anterior, com a mesma duração
+     * do período selecionado — usado só para comparação (▲/▼).
+     */
+    _getPreviousRange(range) {
+        const duration = range.end.getTime() - range.start.getTime();
+        const prevEnd = new Date(range.start.getTime() - 1);
+        const prevStart = new Date(prevEnd.getTime() - duration);
+        return { start: prevStart, end: prevEnd };
+    },
+
     _syncPeriodButtonsUI(range) {
         document.querySelectorAll('.bi-period-btn').forEach(btn => {
             const p = btn.getAttribute('data-period');
@@ -306,39 +328,149 @@ const BI = {
         return map;
     },
 
-    renderKPIs(orders) {
+    _calcTotals(orders, costFallback) {
+        const total = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+
+        const itemsSold = orders.reduce((sum, o) =>
+            sum + (o.order_items || []).reduce((s, i) => s + (i.quantity || 1), 0), 0);
+
+        const lucro = orders.reduce((sum, o) => {
+            const itemsCost = (o.order_items || []).reduce((s, i) => {
+                const cost = i.unit_cost || costFallback[i.product_id] || 0;
+                return s + (cost * (i.quantity || 1));
+            }, 0);
+            return sum + ((o.total_amount || 0) - itemsCost);
+        }, 0);
+
+        const margem = total > 0 ? (lucro / total) * 100 : 0;
+        const ticketMedio = orders.length > 0 ? total / orders.length : 0;
+
+        return { total, lucro, margem, itemsSold, ticketMedio, count: orders.length };
+    },
+
+    renderKPIs(orders, prevOrders = []) {
         try {
             const costFallback = this._buildCostFallbackMap();
 
-            const total = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+            const cur = this._calcTotals(orders, costFallback);
+            const prev = this._calcTotals(prevOrders, costFallback);
 
-            const itemsSold = orders.reduce((sum, o) =>
-                sum + (o.order_items || []).reduce((s, i) => s + (i.quantity || 1), 0), 0);
-
-            const lucro = orders.reduce((sum, o) => {
-                const itemsCost = (o.order_items || []).reduce((s, i) => {
-                    const cost = i.unit_cost || costFallback[i.product_id] || 0;
-                    return s + (cost * (i.quantity || 1));
-                }, 0);
-                return sum + ((o.total_amount || 0) - itemsCost);
-            }, 0);
-
-            const margem = total > 0 ? ((lucro / total) * 100).toFixed(1) : 0;
+            this._lastKPIs = cur;
 
             const set = (id, val) => {
                 const el = document.getElementById(id);
                 if (el) el.textContent = val;
             };
 
-            set('bi-revenue', `R$ ${this._formatBRL(total)}`);
-            set('bi-profit',  `R$ ${this._formatBRL(lucro)}`);
-            set('bi-margin',  `${margem}%`);
-            set('bi-orders',  orders.length);
-            set('bi-items-sold', itemsSold);
+            set('bi-revenue', `R$ ${this._formatBRL(cur.total)}`);
+            set('bi-profit', `R$ ${this._formatBRL(cur.lucro)}`);
+            set('bi-margin', `${cur.margem.toFixed(1)}%`);
+            set('bi-orders', cur.count);
+            set('bi-items-sold', cur.itemsSold);
+            set('bi-ticket-medio', `R$ ${this._formatBRL(cur.ticketMedio)}`);
+
+            this._renderDelta('bi-revenue-delta', cur.total, prev.total);
+            this._renderDelta('bi-profit-delta', cur.lucro, prev.lucro);
+            this._renderDelta('bi-margin-delta', cur.margem, prev.margem, true);
+            this._renderDelta('bi-ticket-medio-delta', cur.ticketMedio, prev.ticketMedio);
+            this._renderDelta('bi-orders-delta', cur.count, prev.count);
+            this._renderDelta('bi-items-sold-delta', cur.itemsSold, prev.itemsSold);
 
         } catch (err) {
             log(`❌ Erro KPIs: ${err.message}`, 'error');
         }
+    },
+
+    /**
+     * ✅ NOVO (v9.2): desenha a comparação "▲ 12% vs período anterior"
+     * embaixo de cada cartão do topo. Quando não há período anterior
+     * pra comparar (ex: primeira venda do vendedor), mostra um texto
+     * neutro em vez de uma conta sem sentido tipo "▲ Infinity%".
+     */
+    _renderDelta(elId, curVal, prevVal, isPercentPoint = false) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+
+        if (!curVal && !prevVal) {
+            el.innerHTML = '';
+            return;
+        }
+
+        if (!prevVal) {
+            el.innerHTML = '<span class="text-slate-500">— sem período anterior pra comparar</span>';
+            return;
+        }
+
+        const diff = curVal - prevVal;
+        const pct = isPercentPoint ? diff : (diff / Math.abs(prevVal)) * 100;
+        const isUp = diff >= 0;
+        const arrow = isUp ? '▲' : '▼';
+        const color = isUp ? 'text-green-500' : 'text-red-500';
+        const suffix = isPercentPoint ? 'p.p.' : '%';
+
+        el.innerHTML = `<span class="${color}">${arrow} ${Math.abs(pct).toFixed(1)}${suffix}</span> <span class="text-slate-600">vs período anterior</span>`;
+    },
+
+    /**
+     * ✅ NOVO (v9.2): parágrafo em texto corrido explicando o cenário do
+     * período, sem precisar interpretar gráfico nenhum.
+     */
+    renderExecutiveSummary(orders, prevOrders, range) {
+        const el = document.getElementById('bi-executive-summary');
+        if (!el) return;
+
+        if (!orders.length) {
+            el.textContent = `Nenhuma venda registrada em "${range.label}".`;
+            return;
+        }
+
+        const k = this._lastKPIs || this._calcTotals(orders, this._buildCostFallbackMap());
+        const prevTotal = prevOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
+
+        let trendText = '';
+        if (prevTotal > 0) {
+            const pct = ((k.total - prevTotal) / prevTotal) * 100;
+            trendText = pct >= 0
+                ? ` Isso é <strong class="text-green-400">${pct.toFixed(0)}% a mais</strong> que no período anterior.`
+                : ` Isso é <strong class="text-red-400">${Math.abs(pct).toFixed(0)}% a menos</strong> que no período anterior.`;
+        }
+
+        el.innerHTML = `Em <strong>${range.label}</strong>, o faturamento foi de <strong>R$ ${this._formatBRL(k.total)}</strong>,
+            com lucro de <strong>R$ ${this._formatBRL(k.lucro)}</strong> (margem de ${k.margem.toFixed(1)}%).${trendText}
+            Foram <strong>${k.count}</strong> pedido(s), com ticket médio de <strong>R$ ${this._formatBRL(k.ticketMedio)}</strong>.`;
+    },
+
+    /**
+     * ✅ NOVO (v9.2): Demonstrativo de Resultado simplificado — receita,
+     * custo do que foi vendido, e o que sobrou de lucro bruto.
+     */
+    renderDRE(orders) {
+        const el = document.getElementById('bi-dre');
+        if (!el) return;
+
+        const costFallback = this._buildCostFallbackMap();
+        const receita = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
+        const cpv = orders.reduce((sum, o) => sum + (o.order_items || []).reduce((s, i) => {
+            const cost = i.unit_cost || costFallback[i.product_id] || 0;
+            return s + (cost * (i.quantity || 1));
+        }, 0), 0);
+        const lucroBruto = receita - cpv;
+        const margem = receita > 0 ? (lucroBruto / receita) * 100 : 0;
+
+        const row = (label, value, isTotal = false) => `
+            <div class="flex justify-between items-center py-2 ${isTotal ? 'border-t border-white/10 mt-2 pt-3' : ''}">
+                <span class="${isTotal ? 'font-black text-white' : 'text-slate-400'} text-sm">${label}</span>
+                <span class="${isTotal ? 'font-black text-lg' : 'font-bold'} ${value < 0 ? 'text-red-400' : 'text-slate-200'}">
+                    R$ ${this._formatBRL(value)}
+                </span>
+            </div>
+        `;
+
+        el.innerHTML = `
+            ${row('Receita Bruta (Faturamento)', receita)}
+            ${row('(-) Custo dos Produtos Vendidos (CPV)', -cpv)}
+            ${row(`(=) Lucro Bruto (margem de ${margem.toFixed(1)}%)`, lucroBruto, true)}
+        `;
     },
 
     _buildWhatsAppLink(phone) {
@@ -359,11 +491,7 @@ const BI = {
                 return;
             }
 
-            // ✅ NOVO (v9.0): vendedor não tem permissão de deletar pedido
-            // (nem faria sentido — o pedido pode ter itens de outros vendedores)
             const canDelete = this._viewRole === 'supreme';
-            // ✅ NOVO (v9.1): só o Admin Supremo confirma pagamento (o Pix
-            // cai numa conta centralizada, não na do vendedor individual)
             const canConfirmPayment = this._viewRole === 'supreme';
 
             list.innerHTML = orders.slice(0, 15).map(order => {
@@ -376,7 +504,6 @@ const BI = {
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
                 });
 
-                // ✅ NOVO (v9.1): badges de forma de pagamento e status de confirmação
                 const isPaid = !!order.payment_confirmed;
                 const paymentBadge = order.payment_method ? `
                     <span class="text-[10px] font-black px-2 py-1 rounded-full bg-white/10 text-slate-300 uppercase">${order.payment_method}</span>
@@ -428,6 +555,239 @@ const BI = {
         } catch (err) {
             log(`❌ Erro lista pedidos: ${err.message}`, 'error');
         }
+    },
+
+    /**
+     * ✅ NOVO (v9.2): Curva ABC — classifica produtos pela contribuição
+     * acumulada no faturamento do período (A ≤80%, B ≤95%, C o resto).
+     */
+    renderABC(orders) {
+        const container = document.getElementById('bi-abc-table');
+        if (!container) return;
+
+        if (!orders.length) {
+            container.innerHTML = '<div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>';
+            return;
+        }
+
+        const revenueByProduct = {};
+        const nameByProduct = {};
+
+        orders.forEach(o => {
+            (o.order_items || []).forEach(item => {
+                const pid = item.product_id;
+                if (!pid) return;
+                const rev = (item.unit_price || 0) * (item.quantity || 1);
+                revenueByProduct[pid] = (revenueByProduct[pid] || 0) + rev;
+                if (item.products?.name) nameByProduct[pid] = item.products.name;
+            });
+        });
+
+        const entries = Object.entries(revenueByProduct).sort((a, b) => b[1] - a[1]);
+        const totalRevenue = entries.reduce((s, [, v]) => s + v, 0);
+
+        if (!entries.length || !totalRevenue) {
+            container.innerHTML = '<div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>';
+            return;
+        }
+
+        let cumulative = 0;
+        container.innerHTML = entries.map(([pid, rev]) => {
+            cumulative += rev;
+            const cumPct = (cumulative / totalRevenue) * 100;
+            const classe = cumPct <= 80 ? 'A' : cumPct <= 95 ? 'B' : 'C';
+            const classColor = classe === 'A'
+                ? 'bg-green-500/20 text-green-400'
+                : classe === 'B'
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-slate-500/20 text-slate-400';
+            const pctOfTotal = (rev / totalRevenue) * 100;
+            const name = nameByProduct[pid] || `Produto #${pid.slice(0, 6)}`;
+
+            return `
+                <div class="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <span class="text-[10px] font-black px-2 py-1 rounded-full ${classColor} uppercase flex-shrink-0">Classe ${classe}</span>
+                        <span class="text-sm text-white font-bold truncate">${window.escapeHtml(name)}</span>
+                    </div>
+                    <div class="text-right flex-shrink-0 ml-2">
+                        <div class="text-sm font-bold text-green-400">R$ ${this._formatBRL(rev)}</div>
+                        <div class="text-[10px] text-slate-500">${pctOfTotal.toFixed(1)}% do faturamento</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    /**
+     * ✅ NOVO (v9.2): Estoque Crítico — produtos com estoque igual ou
+     * abaixo do mínimo configurado no cadastro (products.min_stock).
+     * Não depende do período selecionado (é sobre o estoque agora).
+     */
+    renderCriticalStock() {
+        const container = document.getElementById('bi-low-stock-list');
+        if (!container) return;
+
+        let products = window.APP?.products?.products || [];
+        if (this._viewRole === 'seller') {
+            products = products.filter(p => p.owner_id === window.APP.auth.userId);
+        }
+
+        if (!products.length) {
+            container.innerHTML = '<div class="text-slate-600 text-center py-6">Nenhum produto cadastrado</div>';
+            return;
+        }
+
+        const critical = products.filter(p => (p.stock || 0) <= (p.min_stock ?? 5));
+
+        if (!critical.length) {
+            container.innerHTML = '<div class="text-green-500/70 text-center py-6">✅ Nenhum produto com estoque crítico</div>';
+            return;
+        }
+
+        container.innerHTML = critical
+            .sort((a, b) => (a.stock || 0) - (b.stock || 0))
+            .map(p => `
+                <div class="flex justify-between items-center bg-red-500/5 p-3 rounded-xl border border-red-500/20">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm text-white font-bold truncate block">${window.escapeHtml(p.name)}</span>
+                        ${this._viewRole === 'supreme' ? `<span class="text-[10px] text-slate-500">👤 ${window.escapeHtml(p.profiles?.full_name || 'Vendedor')}</span>` : ''}
+                    </div>
+                    <div class="text-right flex-shrink-0 ml-2">
+                        <div class="text-sm font-black text-red-400">${p.stock || 0} un.</div>
+                        <div class="text-[10px] text-slate-500">mín: ${p.min_stock ?? 5}</div>
+                    </div>
+                </div>
+            `).join('');
+    },
+
+    /**
+     * ✅ NOVO (v9.2): Giro de Estoque — com base no ritmo de vendas do
+     * período selecionado, estima quantos dias o estoque atual ainda
+     * dura. Produto sem nenhuma venda no período aparece como
+     * "estoque parado".
+     */
+    renderStockTurnover(orders, range) {
+        const container = document.getElementById('bi-stock-turnover');
+        if (!container) return;
+
+        let products = window.APP?.products?.products || [];
+        if (this._viewRole === 'seller') {
+            products = products.filter(p => p.owner_id === window.APP.auth.userId);
+        }
+
+        if (!products.length) {
+            container.innerHTML = '<div class="text-slate-600 text-center py-6">Nenhum produto cadastrado</div>';
+            return;
+        }
+
+        const days = Math.max(1, Math.ceil((range.end - range.start) / 86400000));
+
+        const soldByProduct = {};
+        orders.forEach(o => {
+            (o.order_items || []).forEach(item => {
+                if (!item.product_id) return;
+                soldByProduct[item.product_id] = (soldByProduct[item.product_id] || 0) + (item.quantity || 1);
+            });
+        });
+
+        const rows = products.map(p => {
+            const sold = soldByProduct[p.id] || 0;
+            const dailyRate = sold / days;
+            const stock = p.stock || 0;
+            const coverageDays = dailyRate > 0 ? Math.round(stock / dailyRate) : null;
+            return { p, sold, coverageDays, stock };
+        });
+
+        rows.sort((a, b) => {
+            if (a.coverageDays === null && b.coverageDays === null) return 0;
+            if (a.coverageDays === null) return 1;
+            if (b.coverageDays === null) return -1;
+            return a.coverageDays - b.coverageDays;
+        });
+
+        container.innerHTML = rows.map(r => {
+            let badge, badgeColor;
+            if (r.coverageDays === null) {
+                badge = 'Estoque parado';
+                badgeColor = 'bg-slate-500/20 text-slate-400';
+            } else if (r.coverageDays <= 7) {
+                badge = `${r.coverageDays} dias restantes`;
+                badgeColor = 'bg-red-500/20 text-red-400';
+            } else if (r.coverageDays <= 20) {
+                badge = `${r.coverageDays} dias restantes`;
+                badgeColor = 'bg-yellow-500/20 text-yellow-400';
+            } else {
+                badge = `${r.coverageDays} dias restantes`;
+                badgeColor = 'bg-green-500/20 text-green-400';
+            }
+
+            return `
+                <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm text-white font-bold truncate block">${window.escapeHtml(r.p.name)}</span>
+                        <span class="text-[10px] text-slate-500">${r.stock} un. em estoque · ${r.sold} vendida(s) no período</span>
+                    </div>
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full ${badgeColor} uppercase flex-shrink-0 ml-2">${badge}</span>
+                </div>
+            `;
+        }).join('');
+    },
+
+    /**
+     * ✅ NOVO (v9.2): Ranking de Vendedores — só pro Admin Supremo.
+     */
+    renderVendorRanking(orders) {
+        const wrapper = document.getElementById('bi-vendor-ranking-wrapper');
+        const container = document.getElementById('bi-vendor-ranking');
+        if (!wrapper || !container) return;
+
+        if (this._viewRole !== 'supreme') {
+            wrapper.classList.add('hidden');
+            return;
+        }
+        wrapper.classList.remove('hidden');
+
+        const costFallback = this._buildCostFallbackMap();
+        const productMap = {};
+        (window.APP?.products?.products || []).forEach(p => { productMap[p.id] = p; });
+
+        const byVendor = {};
+        orders.forEach(o => {
+            (o.order_items || []).forEach(item => {
+                const product = productMap[item.product_id];
+                const vendorId = product?.owner_id || 'desconhecido';
+                const vendorName = product?.profiles?.full_name || 'Vendedor desconhecido';
+                if (!byVendor[vendorId]) byVendor[vendorId] = { name: vendorName, revenue: 0, profit: 0, items: 0 };
+
+                const rev = (item.unit_price || 0) * (item.quantity || 1);
+                const cost = (item.unit_cost || costFallback[item.product_id] || 0) * (item.quantity || 1);
+
+                byVendor[vendorId].revenue += rev;
+                byVendor[vendorId].profit += (rev - cost);
+                byVendor[vendorId].items += (item.quantity || 1);
+            });
+        });
+
+        const ranked = Object.values(byVendor).sort((a, b) => b.revenue - a.revenue);
+
+        if (!ranked.length) {
+            container.innerHTML = '<div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>';
+            return;
+        }
+
+        container.innerHTML = ranked.map((v, i) => `
+            <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                <div class="flex items-center gap-3">
+                    <span class="text-lg font-black ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-orange-400' : 'text-slate-600'}">#${i + 1}</span>
+                    <span class="text-sm text-white font-bold">${window.escapeHtml(v.name)}</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm font-black text-green-400">R$ ${this._formatBRL(v.revenue)}</div>
+                    <div class="text-[10px] text-slate-500">lucro: R$ ${this._formatBRL(v.profit)} · ${v.items}un</div>
+                </div>
+            </div>
+        `).join('');
     },
 
     async prepareCharts(orders, token, range) {
@@ -628,11 +988,6 @@ const BI = {
                 });
             });
 
-            // ✅ FIX v9.0: esse fallback busca TODOS os order_items do banco —
-            // só faz sentido pro Admin (visão geral). Pro vendedor, os itens já
-            // vêm certos da consulta escopada em _fetchSellerOrders(), então
-            // esse fallback fica restrito ao modo supremo pra não vazar dados
-            // de outros vendedores no gráfico do vendedor.
             if (Object.keys(countById).length === 0 && this._viewRole === 'supreme') {
                 try {
                     const { data: allItems } = await _supabase
@@ -774,12 +1129,6 @@ const BI = {
         return nameMap;
     },
 
-    /**
-     * ✅ NOVO (v9.1): confirma que o pagamento Pix de um pedido foi
-     * recebido. Só o Admin Supremo pode fazer isso (o banco também
-     * protege isso via trigger, então essa checagem aqui é a segunda
-     * camada de defesa, igual ao deleteOrder).
-     */
     async confirmPayment(orderId) {
         if (this._viewRole !== 'supreme') {
             alert('❌ Você não tem permissão para confirmar pagamentos.');
@@ -804,11 +1153,6 @@ const BI = {
         }
     },
 
-    /**
-     * ✅ Apenas Admin Supremo pode deletar (canDelete gate já esconde o
-     * botão no HTML pra vendedor, mas mantemos a checagem aqui também
-     * como segunda camada de defesa).
-     */
     async deleteOrder(orderId) {
         if (this._viewRole !== 'supreme') {
             alert('❌ Você não tem permissão para deletar pedidos.');
