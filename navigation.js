@@ -1,11 +1,19 @@
 /**
- * NAVIGATION.JS v3.3
+ * NAVIGATION.JS v3.4
  * ✅ Event listeners para data-nav e data-action (sidebar + bottom nav)
  * ✅ Todas as seções registradas (incluindo ads-requests, vendor-settings)
  * ✅ Sem dependência de onclick no HTML
  * ✅ goToTab() exposta globalmente
  * ✅ open-profile / close-profile-modal — botão de conta abre cartão de perfil
- * ✅ v3.3 NOVO: ao abrir a aba BI, limpa o selo de "nova venda" (Notifications)
+ * ✅ ao abrir a aba BI, limpa o selo de "nova venda" (Notifications)
+ * ✅ v3.4 FIX: faltava o case da aba "ads-requests" em _loadDataForTab().
+ *    Toda outra aba (bi, admin, seller, tenants, ads, vendor-settings)
+ *    recarrega os próprios dados sempre que é aberta — "ads-requests"
+ *    era a única exceção, então o formulário de solicitação do vendedor
+ *    e a lista de solicitações dele nunca eram atualizados ao clicar na
+ *    aba (dependiam só de um listener solto dentro do ads.js, que foi
+ *    removido por estar duplicando o clique). Agora essa aba se comporta
+ *    como todas as outras.
  */
 
 const Navigation = {
@@ -17,7 +25,7 @@ const Navigation = {
         this._registerDataActionButtons();
         this._registerAuthTabs();
         this._registerForms();
-        log('✅ Navigation v3.3 inicializado', 'success');
+        log('✅ Navigation v3.4 inicializado', 'success');
     },
 
     _registerDataNavButtons() {
@@ -205,13 +213,24 @@ const Navigation = {
         try {
             if (tab === 'bi') {
                 if (window.APP.bi?.loadDashboard) window.APP.bi.loadDashboard();
-                // ✅ NOVO: entrar no BI "lê" as notificações de venda pendentes
+                // entrar no BI "lê" as notificações de venda pendentes
                 window.APP.notifications?.clearUnseen?.();
             }
             else if (tab === 'admin' && window.APP.products?.renderAdmin) window.APP.products.renderAdmin();
             else if (tab === 'seller' && window.APP.products?.renderSeller) window.APP.products.renderSeller();
             else if (tab === 'tenants' && window.APP.tenants?.loadDashboard) window.APP.tenants.loadDashboard();
             else if (tab === 'ads' && window.APP.ads?.loadAds) window.APP.ads.loadAds();
+            // ✅ NOVO (v3.4): faltava esse case. Relê o cargo atual (pode
+            // ter mudado desde o Ads.init() original), redesenha o
+            // formulário de solicitação se for vendedor, e recarrega a
+            // lista de solicitações da própria conta.
+            else if (tab === 'ads-requests' && window.APP.ads) {
+                window.APP.ads.currentRole = window.APP.auth?.role || 'client';
+                if (window.APP.ads.currentRole === 'seller' && window.APP.ads._renderVendorRequestForm) {
+                    window.APP.ads._renderVendorRequestForm();
+                }
+                if (window.APP.ads._loadVendorRequests) window.APP.ads._loadVendorRequests();
+            }
             else if (tab === 'vendor-settings' && window.APP.vendorSettings?.refresh) window.APP.vendorSettings.refresh();
         } catch (err) {
             log(`⚠️ Erro ao carregar aba ${tab}: ${err.message}`, 'warning');
