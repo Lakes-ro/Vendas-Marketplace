@@ -1,10 +1,19 @@
 /**
- * ADS.JS v6.1
+ * ADS.JS v6.2
  * ✅ Admin: Gerencia anúncios (criar, editar, deletar)
- * ✅ Admin: NOVO — vê e aprova/rejeita solicitações de anúncio dos vendedores
+ * ✅ Admin: vê e aprova/rejeita solicitações de anúncio dos vendedores
  * ✅ Vendedores: Solicita anúncios (status: pending/approved/rejected)
  * ✅ Banner clicável e expansível
- * ✅ Sem duplicação de código
+ * ✅ FIX CRÍTICO v6.2: "this.currentRole" era definido UMA ÚNICA VEZ, no
+ *    Ads.init() — que roda ao carregar a página, quando quase sempre
+ *    ninguém ainda está logado. Esse valor nunca era atualizado depois
+ *    do login, então o formulário de "Solicitar Anúncio" do vendedor e
+ *    o painel "Solicitações Pendentes" do Admin Supremo nunca apareciam
+ *    de verdade — os dois dependiam do mesmo dado congelado e errado.
+ *    Agora o cargo é relido toda vez que loadAds() roda (o que já
+ *    acontece automaticamente sempre que a aba de Anúncios é aberta).
+ *    Também foi removido um listener de clique duplicado no botão de
+ *    "Solicitações" (brigava com o listener genérico do navigation.js).
  */
 
 const Ads = {
@@ -18,17 +27,23 @@ const Ads = {
 
     async init() {
         try {
-            log('📢 Inicializando Ads v6.1...', 'info');
-            this.currentRole = window.APP?.auth?.role || 'client';
+            log('📢 Inicializando Ads v6.2...', 'info');
+            this.currentRole = this._getRole();
             this.detectPWA();
             this._ensureModal();
-            await this.loadAds();
-            this._setupVendorUI();
-            this._setupAdminRequestsUI(); // ✅ NOVO: Admin vê solicitações pendentes
-            log('✅ Ads v6.1 inicializado', 'success');
+            await this.loadAds(); // já cuida de configurar a UI certa pro cargo atual
+            log('✅ Ads v6.2 inicializado', 'success');
         } catch (err) {
             log(`❌ Erro ao inicializar ads: ${err.message}`, 'error');
         }
+    },
+
+    /**
+     * ✅ NOVO (v6.2): sempre lê o cargo atual direto do Auth, nunca um
+     * valor guardado de antes do login.
+     */
+    _getRole() {
+        return window.APP?.auth?.role || 'client';
     },
 
     detectPWA() {
@@ -36,26 +51,20 @@ const Ads = {
     },
 
     // ===== SETUP PARA VENDEDORES =====
+    /**
+     * ✅ FIX v6.2: só cuida de mostrar os botões de navegação e desenhar
+     * o formulário — não registra mais listeners de clique próprios
+     * (isso já é feito pelo listener genérico de [data-nav] no
+     * navigation.js, evitando o clique disparar duas vezes).
+     */
     _setupVendorUI() {
         if (this.currentRole !== 'seller') return;
 
         const adsReqBtn = document.getElementById('ads-requests-nav-btn');
-        if (adsReqBtn) {
-            adsReqBtn.classList.remove('hidden');
-            adsReqBtn.addEventListener('click', () => {
-                goToTab('ads-requests');
-                this._loadVendorRequests();
-            });
-        }
+        if (adsReqBtn) adsReqBtn.classList.remove('hidden');
 
         const bnav = document.getElementById('bnav-ads-requests');
-        if (bnav) {
-            bnav.classList.remove('hidden');
-            bnav.addEventListener('click', () => {
-                goToTab('ads-requests');
-                this._loadVendorRequests();
-            });
-        }
+        if (bnav) bnav.classList.remove('hidden');
 
         this._renderVendorRequestForm();
     },
@@ -201,18 +210,18 @@ const Ads = {
                 <div class="bg-slate-900/50 p-4 rounded-xl border border-white/5">
                     <div class="flex justify-between items-start mb-3">
                         <div>
-                            <h4 class="text-sm font-bold text-slate-300">${req.title || 'Sem título'}</h4>
+                            <h4 class="text-sm font-bold text-slate-300">${window.escapeHtml(req.title || 'Sem título')}</h4>
                             <span class="${statusColor} text-xs font-bold">${statusLabel}</span>
                         </div>
                         <span class="text-xs text-slate-500">${new Date(req.created_at).toLocaleDateString('pt-BR')}</span>
                     </div>
 
-                    <p class="text-xs text-slate-400 mb-3">${req.description || '—'}</p>
+                    <p class="text-xs text-slate-400 mb-3">${window.escapeHtml(req.description || '—')}</p>
 
                     ${req.status === 'rejected' && req.rejection_reason ? `
                         <div class="bg-red-900/20 border border-red-500/30 p-3 rounded-lg mb-3">
                             <p class="text-xs text-red-400"><strong>Motivo da rejeição:</strong></p>
-                            <p class="text-xs text-red-300 mt-1">${req.rejection_reason}</p>
+                            <p class="text-xs text-red-300 mt-1">${window.escapeHtml(req.rejection_reason)}</p>
                         </div>
                     ` : ''}
 
@@ -239,13 +248,7 @@ const Ads = {
             if (error) throw error;
 
             log('✅ Solicitação deletada', 'success');
-            const vendorId = window.APP?.auth?.userId;
-            const { data } = await _supabase
-                .from('ads_requests')
-                .select('*')
-                .eq('vendor_id', vendorId)
-                .order('created_at', { ascending: false });
-            this._renderVendorRequests(data || []);
+            await this._loadVendorRequests();
 
         } catch (err) {
             log(`❌ Erro ao deletar: ${err.message}`, 'error');
@@ -293,15 +296,15 @@ const Ads = {
             <div class="bg-slate-900/50 p-4 rounded-xl border border-orange-500/20">
                 <div class="flex justify-between items-start mb-2">
                     <div>
-                        <h4 class="text-sm font-bold text-white">${req.title || 'Sem título'}</h4>
-                        <span class="text-xs text-yellow-400 font-semibold">👤 ${req.profiles?.full_name || 'Vendedor'}</span>
+                        <h4 class="text-sm font-bold text-white">${window.escapeHtml(req.title || 'Sem título')}</h4>
+                        <span class="text-xs text-yellow-400 font-semibold">👤 ${window.escapeHtml(req.profiles?.full_name || 'Vendedor')}</span>
                     </div>
                     <span class="text-[10px] text-slate-500">${typeLabel[req.type] || req.type}</span>
                 </div>
 
-                <p class="text-xs text-slate-400 mb-2">${req.description || '—'}</p>
+                <p class="text-xs text-slate-400 mb-2">${window.escapeHtml(req.description || '—')}</p>
 
-                ${req.link ? `<p class="text-xs text-blue-400 mb-3 break-all">🔗 ${req.link}</p>` : ''}
+                ${req.link ? `<p class="text-xs text-blue-400 mb-3 break-all">🔗 ${window.escapeHtml(req.link)}</p>` : ''}
 
                 <div class="text-[10px] text-slate-600 mb-3">📅 ${new Date(req.created_at).toLocaleString('pt-BR')}</div>
 
@@ -402,6 +405,10 @@ const Ads = {
         try {
             if (!window._supabase) throw new Error('Supabase não disponível');
 
+            // ✅ FIX v6.2: relê o cargo atual toda vez — nunca mais usa
+            // um valor congelado de antes do login.
+            this.currentRole = this._getRole();
+
             log('📥 Carregando anúncios...', 'info');
 
             const { data, error } = await _supabase
@@ -422,9 +429,16 @@ const Ads = {
                 this.showFallback();
             }
 
+            // ✅ FIX v6.2: configura a UI de vendedor (formulário de
+            // solicitação) toda vez, com o cargo atualizado.
+            if (this.currentRole === 'seller') {
+                this._setupVendorUI();
+            }
+
             if (this.currentRole === 'supreme') {
+                this._setupAdminRequestsUI();
                 this.renderAdminList();
-                this._loadAdminRequests(); // ✅ NOVO: recarrega solicitações toda vez que a aba abre
+                this._loadAdminRequests();
             }
 
         } catch (err) {
@@ -469,9 +483,9 @@ const Ads = {
                                 bg-gradient-to-r from-yellow-900/20 to-yellow-800/20
                                 rounded-[32px] border border-yellow-500/30 p-8">
                         <h2 class="text-4xl font-black text-yellow-400 mb-4 text-center">
-                            ${currentAd.ad_title || 'Aviso'}
+                            ${window.escapeHtml(currentAd.ad_title || 'Aviso')}
                         </h2>
-                        <p class="text-lg text-slate-300 text-center max-w-md">${currentAd.ad_text || ''}</p>
+                        <p class="text-lg text-slate-300 text-center max-w-md">${window.escapeHtml(currentAd.ad_text || '')}</p>
                         <p class="text-sm text-yellow-500 mt-4">👆 Toque para ampliar</p>
                     </div>
                 `;
@@ -608,9 +622,9 @@ const Ads = {
                             <div class="flex-1 min-w-0">
                                 <div class="text-xs text-yellow-400 font-bold mb-1">${typeLabel}</div>
                                 ${isText
-                                    ? `<div class="text-sm text-white font-bold truncate">${ad.ad_title || '(sem título)'}</div>
-                                       <div class="text-xs text-slate-400 truncate">${ad.ad_text ? ad.ad_text.substring(0, 60) + '...' : ''}</div>`
-                                    : `<div class="text-xs text-slate-300 truncate font-bold">Link: ${ad.link_contact || '(sem link)'}</div>`
+                                    ? `<div class="text-sm text-white font-bold truncate">${window.escapeHtml(ad.ad_title || '(sem título)')}</div>
+                                       <div class="text-xs text-slate-400 truncate">${ad.ad_text ? window.escapeHtml(ad.ad_text.substring(0, 60)) + '...' : ''}</div>`
+                                    : `<div class="text-xs text-slate-300 truncate font-bold">Link: ${window.escapeHtml(ad.link_contact || '(sem link)')}</div>`
                                 }
                                 <div class="text-[10px] text-slate-600 mt-1">📅 ${new Date(ad.created_at).toLocaleDateString('pt-BR')}</div>
                             </div>
