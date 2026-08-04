@@ -1,20 +1,23 @@
 /**
- * PRODUCTS.JS v4.3
+ * PRODUCTS.JS v4.4
  * ✅ Removido código do script-vitrine.js que estava colado no final por engano
  * ✅ saveProductDirect() para botão onclick sem form
  * ✅ fetchAll() com filtro status=active
  * ✅ render() com try/catch completo
  * ✅ produtos de vendedor offline (is_online = false em vendor_status)
  *    aparecem marcados no marketplace, com o botão de compra desabilitado
- * ✅ botão "Falar com o Vendedor" no card do produto — usa o telefone
- *    salvo no perfil do vendedor (profiles.phone) pra abrir o WhatsApp
- *    direto. Some automaticamente se o vendedor não tiver telefone
- *    cadastrado.
- * ✅ v4.3 FIX: o formulário de produto já tinha o campo "Estoque Mínimo"
- *    (input #p-min-stock), mas ele nunca era buscado do banco nem salvo
- *    — por isso o índice "Estoque Crítico" do BI não tinha como
- *    funcionar de verdade. Agora min_stock é lido, salvo e editado
- *    corretamente.
+ * ✅ botão "Falar com o Vendedor" no card do produto
+ * ✅ v4.3: min_stock (Estoque Mínimo) agora é lido, salvo e editado
+ *    corretamente — necessário pro índice de Estoque Crítico do BI
+ * ✅ v4.4 FIX CRÍTICO: ao EDITAR um produto, o código sempre incluía
+ *    "owner_id: window.APP.auth.userId" no payload do UPDATE — ou seja,
+ *    o dono do produto virava quem estava SALVANDO a edição, não quem
+ *    era o dono de verdade. Na prática: se o Admin Supremo editasse
+ *    (mesmo só o título) um produto de outro vendedor, o produto
+ *    "roubava" a posse pro Admin — sumia do estoque do vendedor
+ *    original e aparecia no do Admin. Agora "owner_id" só é definido
+ *    ao CRIAR um produto novo; ao editar, o dono original nunca é
+ *    tocado.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -292,7 +295,7 @@ const Products = {
                 if (el) el.value = '';
             });
 
-            // ✅ FIX v4.3: estoque mínimo tem valor padrão (5), não fica vazio
+            // Estoque mínimo tem valor padrão (5), não fica vazio
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = 5;
 
@@ -332,7 +335,6 @@ const Products = {
             document.getElementById('p-stock').value = product.stock || 0;
             document.getElementById('p-desc').value = product.description || '';
 
-            // ✅ FIX v4.3: agora carrega o estoque mínimo real do produto
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = product.min_stock ?? 5;
 
@@ -398,15 +400,17 @@ const Products = {
                 log(`📤 Imagem enviada: ${fileName}`, 'success');
             }
 
+            // ✅ FIX v4.4: "owner_id" NÃO entra mais aqui por padrão.
+            // Só é adicionado explicitamente no ramo de CRIAÇÃO (insert),
+            // logo abaixo. Assim, uma edição nunca mexe em quem é o dono
+            // do produto — nem por acidente.
             const productData = {
                 name,
                 price,
                 cost_price: parseFloat(document.getElementById('p-cost')?.value) || 0,
                 stock: parseInt(document.getElementById('p-stock')?.value) || 0,
-                // ✅ FIX v4.3: estoque mínimo agora é salvo de verdade
                 min_stock: parseInt(document.getElementById('p-min-stock')?.value) || 5,
                 description: document.getElementById('p-desc')?.value?.trim() || '',
-                owner_id: window.APP.auth.userId,
                 active: true
             };
 
@@ -419,6 +423,9 @@ const Products = {
                     throw new Error('Você não tem permissão para editar este produto');
                 }
 
+                // ✅ FIX v4.4: UPDATE nunca inclui owner_id — o dono
+                // original do produto é preservado, mesmo quando quem
+                // está editando é o Admin Supremo.
                 result = await _supabase
                     .from('products')
                     .update(productData)
@@ -427,6 +434,10 @@ const Products = {
                 log('✅ Produto atualizado', 'success');
                 alert('✅ Produto atualizado!');
             } else {
+                // Só na CRIAÇÃO de um produto novo é que o dono é quem
+                // está cadastrando.
+                productData.owner_id = window.APP.auth.userId;
+
                 result = await _supabase
                     .from('products')
                     .insert([productData]);
