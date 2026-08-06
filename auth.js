@@ -1,5 +1,5 @@
 /**
- * AUTH.JS v8.4
+ * AUTH.JS v8.5
  * ✅ Botão de logout mostra avatar, nome, email e role do usuário logado
  * ✅ Bottom nav sincronizado
  * ✅ loginDirect / signupDirect / resetPasswordDirect
@@ -7,14 +7,13 @@
  * ✅ 'ads-nav-btn' exclusivo do Admin Supremo; vendedor usa 'ads-requests-nav-btn'
  * ✅ 'bi-nav-btn' liberado pro vendedor — bi.js escopa os dados por role
  * ✅ Botão de conta abre cartão de perfil (nome, role, email, telefone)
- * ✅ logout também encerra a escuta em tempo real de notificações de venda
- * ✅ v8.4 FIX CRÍTICO: o botão "🚀 QUERO VENDER" existia no HTML do cartão
- *    de perfil, mas (1) nunca era exibido pra ninguém — ficava sempre
- *    escondido — e (2) chamava becomeSeller(), uma função que nunca
- *    tinha sido escrita neste arquivo. Ou seja: mesmo uma conta 'client'
- *    clicando nesse botão, nada acontecia. Agora o botão aparece só pra
- *    quem é 'client', e becomeSeller() de fato promove a própria conta a
- *    vendedor.
+ * ✅ v8.4: botão "🚀 QUERO VENDER" agora aparece pra quem é 'client', e
+ *    becomeSeller() promove a própria conta a vendedor de verdade.
+ * ✅ v8.5 FIX: o logout() fazia tudo (desconectar, limpar notificações,
+ *    trocar aba) menos fechar o modal de onde normalmente se clica em
+ *    "Sair" — o cartão de perfil ficava "grudado" na tela depois de
+ *    desconectar. Agora fecha o modal de perfil e o de login
+ *    imediatamente após confirmar o logout.
  */
 
 const Auth = {
@@ -277,8 +276,7 @@ const Auth = {
         const phoneEl = document.getElementById('profile-modal-phone');
         if (phoneEl) phoneEl.textContent = phone;
 
-        // ✅ FIX v8.4: só mostra "QUERO VENDER" pra quem ainda é Cliente.
-        // Antes esse botão nunca aparecia pra ninguém, pra nenhum role.
+        // Só mostra "QUERO VENDER" pra quem ainda é Cliente.
         const becomeSellerBtn = document.getElementById('profile-become-seller-btn');
         if (becomeSellerBtn) {
             if (role === 'client') becomeSellerBtn.classList.remove('hidden');
@@ -289,11 +287,8 @@ const Auth = {
     },
 
     /**
-     * ✅ NOVO (v8.4): promove a PRÓPRIA conta de 'client' para 'seller'.
-     * Só funciona pra quem está logado como Cliente — vendedores e
-     * admins supremos não têm esse botão nem essa opção. Depois de
-     * promovido, o perfil é recarregado (pra liberar ESTOQUE/BI/etc na
-     * navegação) e a pessoa é levada direto pra aba de Estoque.
+     * Promove a PRÓPRIA conta de 'client' para 'seller'. Só funciona pra
+     * quem está logado como Cliente.
      */
     async becomeSeller() {
         if (!this.session || !this.userId) {
@@ -420,6 +415,12 @@ const Auth = {
     },
 
     // ── Logout ───────────────────────────────────────────────
+    /**
+     * ✅ FIX v8.5: fecha o cartão de perfil (e o modal de login, por
+     * segurança) assim que o logoff é confirmado. Antes, o modal de onde
+     * a pessoa clicou em "Sair" continuava aberto na tela mesmo depois
+     * da sessão já ter sido encerrada de verdade.
+     */
     async logout() {
         if (!confirm('Desconectar?')) return;
         try {
@@ -433,6 +434,11 @@ const Auth = {
             if (window.APP?.notifications?.teardown) {
                 window.APP.notifications.teardown();
             }
+
+            // ✅ NOVO (v8.5): fecha qualquer modal que tenha ficado aberto
+            this.closeProfileModal();
+            this.closeAuthModal();
+
             this.renderUIByRole();
             window.APP?.navigation?.showTab('market');
             alert('✅ Você foi desconectado');

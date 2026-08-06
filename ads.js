@@ -1,19 +1,17 @@
 /**
- * ADS.JS v6.2
+ * ADS.JS v6.3
  * ✅ Admin: Gerencia anúncios (criar, editar, deletar)
  * ✅ Admin: vê e aprova/rejeita solicitações de anúncio dos vendedores
  * ✅ Vendedores: Solicita anúncios (status: pending/approved/rejected)
  * ✅ Banner clicável e expansível
- * ✅ FIX CRÍTICO v6.2: "this.currentRole" era definido UMA ÚNICA VEZ, no
- *    Ads.init() — que roda ao carregar a página, quando quase sempre
- *    ninguém ainda está logado. Esse valor nunca era atualizado depois
- *    do login, então o formulário de "Solicitar Anúncio" do vendedor e
- *    o painel "Solicitações Pendentes" do Admin Supremo nunca apareciam
- *    de verdade — os dois dependiam do mesmo dado congelado e errado.
- *    Agora o cargo é relido toda vez que loadAds() roda (o que já
- *    acontece automaticamente sempre que a aba de Anúncios é aberta).
- *    Também foi removido um listener de clique duplicado no botão de
- *    "Solicitações" (brigava com o listener genérico do navigation.js).
+ * ✅ v6.2: cargo do usuário relido sempre (não fica mais "congelado" de
+ *    antes do login)
+ * ✅ v6.3 NOVO: painel do Admin agora tem abas Pendentes / Aprovadas /
+ *    Rejeitadas / Todas — antes, assim que uma solicitação era aprovada
+ *    ou rejeitada, ela sumia pra sempre da tela (a consulta só buscava
+ *    status='pending'). Aprovadas/Rejeitadas ficam visíveis por 7 dias
+ *    depois da decisão, e só então saem das abas (não desaparecem na
+ *    hora); Pendentes nunca somem sozinhas.
  */
 
 const Ads = {
@@ -25,23 +23,24 @@ const Ads = {
     duplicateData: null,
     currentRole: null,
 
+    // ✅ NOVO (v6.3): estado do histórico de solicitações do Admin
+    adminRequestsFilter: 'pending', // 'pending' | 'approved' | 'rejected' | 'all'
+    _allAdminRequests: [],
+    ADMIN_REQUEST_ARCHIVE_DAYS: 7, // depois de quantos dias aprovadas/rejeitadas somem das abas
+
     async init() {
         try {
-            log('📢 Inicializando Ads v6.2...', 'info');
+            log('📢 Inicializando Ads v6.3...', 'info');
             this.currentRole = this._getRole();
             this.detectPWA();
             this._ensureModal();
             await this.loadAds(); // já cuida de configurar a UI certa pro cargo atual
-            log('✅ Ads v6.2 inicializado', 'success');
+            log('✅ Ads v6.3 inicializado', 'success');
         } catch (err) {
             log(`❌ Erro ao inicializar ads: ${err.message}`, 'error');
         }
     },
 
-    /**
-     * ✅ NOVO (v6.2): sempre lê o cargo atual direto do Auth, nunca um
-     * valor guardado de antes do login.
-     */
     _getRole() {
         return window.APP?.auth?.role || 'client';
     },
@@ -51,12 +50,6 @@ const Ads = {
     },
 
     // ===== SETUP PARA VENDEDORES =====
-    /**
-     * ✅ FIX v6.2: só cuida de mostrar os botões de navegação e desenhar
-     * o formulário — não registra mais listeners de clique próprios
-     * (isso já é feito pelo listener genérico de [data-nav] no
-     * navigation.js, evitando o clique disparar duas vezes).
-     */
     _setupVendorUI() {
         if (this.currentRole !== 'seller') return;
 
@@ -256,59 +249,133 @@ const Ads = {
         }
     },
 
-    // ===== ADMIN: SETUP DA TELA DE SOLICITAÇÕES PENDENTES =====
+    // ===== ADMIN: SETUP DA TELA DE SOLICITAÇÕES =====
     _setupAdminRequestsUI() {
         if (this.currentRole !== 'supreme') return;
         const wrapper = document.getElementById('ads-admin-requests-wrapper');
         if (wrapper) wrapper.classList.remove('hidden');
+        this._ensureAdminRequestsTabs();
     },
 
-    // ===== ADMIN: CARREGAR SOLICITAÇÕES PENDENTES DE TODOS OS VENDEDORES =====
+    /**
+     * ✅ NOVO (v6.3): cria (uma única vez) a barra de abas Pendentes /
+     * Aprovadas / Rejeitadas / Todas, logo acima da lista.
+     */
+    _ensureAdminRequestsTabs() {
+        const listContainer = document.getElementById('ads-admin-requests-list');
+        if (!listContainer) return;
+        if (document.getElementById('ads-admin-requests-tabs')) {
+            this._updateAdminRequestsTabsUI();
+            return;
+        }
+
+        const tabs = document.createElement('div');
+        tabs.id = 'ads-admin-requests-tabs';
+        tabs.className = 'flex gap-2 mb-4 flex-wrap';
+        tabs.innerHTML = `
+            <button data-admin-req-tab="pending" class="px-4 py-2 rounded-full text-xs font-bold uppercase transition-all border">⏳ Pendentes</button>
+            <button data-admin-req-tab="approved" class="px-4 py-2 rounded-full text-xs font-bold uppercase transition-all border">✅ Aprovadas</button>
+            <button data-admin-req-tab="rejected" class="px-4 py-2 rounded-full text-xs font-bold uppercase transition-all border">❌ Rejeitadas</button>
+            <button data-admin-req-tab="all" class="px-4 py-2 rounded-full text-xs font-bold uppercase transition-all border">📋 Todas</button>
+        `;
+        listContainer.parentNode.insertBefore(tabs, listContainer);
+
+        tabs.querySelectorAll('[data-admin-req-tab]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.adminRequestsFilter = btn.getAttribute('data-admin-req-tab');
+                this._updateAdminRequestsTabsUI();
+                this._renderAdminRequests(this._allAdminRequests);
+            });
+        });
+
+        this._updateAdminRequestsTabsUI();
+    },
+
+    _updateAdminRequestsTabsUI() {
+        document.querySelectorAll('[data-admin-req-tab]').forEach(btn => {
+            const isActive = btn.getAttribute('data-admin-req-tab') === this.adminRequestsFilter;
+            btn.classList.toggle('bg-orange-600', isActive);
+            btn.classList.toggle('text-white', isActive);
+            btn.classList.toggle('border-orange-600', isActive);
+            btn.classList.toggle('bg-white/5', !isActive);
+            btn.classList.toggle('text-slate-400', !isActive);
+            btn.classList.toggle('border-white/10', !isActive);
+        });
+    },
+
+    /**
+     * ✅ FIX v6.3: antes só buscava status='pending', por isso aprovadas
+     * e rejeitadas desapareciam para sempre da tela do Admin assim que
+     * decididas. Agora busca TODAS e filtra na tela (por aba escolhida).
+     */
     async _loadAdminRequests() {
         try {
             const { data, error } = await _supabase
                 .from('ads_requests')
                 .select('*, profiles!vendor_id(full_name)')
-                .eq('status', 'pending')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
 
-            this._renderAdminRequests(data || []);
+            this._allAdminRequests = data || [];
+            this._renderAdminRequests(this._allAdminRequests);
         } catch (err) {
-            log(`❌ Erro ao carregar solicitações pendentes: ${err.message}`, 'error');
+            log(`❌ Erro ao carregar solicitações: ${err.message}`, 'error');
         }
     },
 
-    // ===== ADMIN: RENDERIZAR LISTA DE SOLICITAÇÕES PENDENTES =====
-    _renderAdminRequests(requests) {
+    /**
+     * ✅ NOVO (v6.3): uma solicitação aprovada/rejeitada só "some" das
+     * abas Aprovadas/Rejeitadas/Todas depois de ADMIN_REQUEST_ARCHIVE_DAYS
+     * dias contados da decisão — nunca imediatamente. Pendente nunca
+     * some sozinha (só quando o vendedor deleta, ou é decidida).
+     */
+    _isArchived(req) {
+        if (req.status === 'pending') return false;
+        const ref = req.updated_at || req.created_at;
+        const ageDays = (Date.now() - new Date(ref).getTime()) / 86400000;
+        return ageDays > this.ADMIN_REQUEST_ARCHIVE_DAYS;
+    },
+
+    // ===== ADMIN: RENDERIZAR LISTA (respeita a aba ativa) =====
+    _renderAdminRequests(allRequests) {
         const container = document.getElementById('ads-admin-requests-list');
         if (!container) return;
 
-        if (requests.length === 0) {
-            container.innerHTML = '<div class="text-slate-600 text-center py-8">Nenhuma solicitação pendente 🎉</div>';
+        let filtered;
+        if (this.adminRequestsFilter === 'pending') {
+            filtered = allRequests.filter(r => r.status === 'pending');
+        } else if (this.adminRequestsFilter === 'approved') {
+            filtered = allRequests.filter(r => r.status === 'approved' && !this._isArchived(r));
+        } else if (this.adminRequestsFilter === 'rejected') {
+            filtered = allRequests.filter(r => r.status === 'rejected' && !this._isArchived(r));
+        } else {
+            filtered = allRequests.filter(r => !this._isArchived(r));
+        }
+
+        if (filtered.length === 0) {
+            const emptyMsg = {
+                pending: 'Nenhuma solicitação pendente 🎉',
+                approved: `Nenhuma solicitação aprovada nos últimos ${this.ADMIN_REQUEST_ARCHIVE_DAYS} dias`,
+                rejected: `Nenhuma solicitação rejeitada nos últimos ${this.ADMIN_REQUEST_ARCHIVE_DAYS} dias`,
+                all: 'Nenhuma solicitação recente'
+            };
+            container.innerHTML = `<div class="text-slate-600 text-center py-8">${emptyMsg[this.adminRequestsFilter] || 'Nada por aqui'}</div>`;
             return;
         }
 
         const typeLabel = { image: '🖼️ Com Imagem', text: '📝 Com Texto' };
+        const statusMeta = {
+            pending:  { label: '⏳ Pendente',  color: 'text-yellow-400', border: 'border-orange-500/20' },
+            approved: { label: '✅ Aprovado',  color: 'text-green-400',  border: 'border-green-500/20' },
+            rejected: { label: '❌ Rejeitado', color: 'text-red-400',    border: 'border-red-500/20' }
+        };
 
-        container.innerHTML = requests.map(req => `
-            <div class="bg-slate-900/50 p-4 rounded-xl border border-orange-500/20">
-                <div class="flex justify-between items-start mb-2">
-                    <div>
-                        <h4 class="text-sm font-bold text-white">${window.escapeHtml(req.title || 'Sem título')}</h4>
-                        <span class="text-xs text-yellow-400 font-semibold">👤 ${window.escapeHtml(req.profiles?.full_name || 'Vendedor')}</span>
-                    </div>
-                    <span class="text-[10px] text-slate-500">${typeLabel[req.type] || req.type}</span>
-                </div>
+        container.innerHTML = filtered.map(req => {
+            const meta = statusMeta[req.status] || statusMeta.pending;
 
-                <p class="text-xs text-slate-400 mb-2">${window.escapeHtml(req.description || '—')}</p>
-
-                ${req.link ? `<p class="text-xs text-blue-400 mb-3 break-all">🔗 ${window.escapeHtml(req.link)}</p>` : ''}
-
-                <div class="text-[10px] text-slate-600 mb-3">📅 ${new Date(req.created_at).toLocaleString('pt-BR')}</div>
-
-                <div class="flex gap-2">
+            const actionButtons = req.status === 'pending' ? `
+                <div class="flex gap-2 mt-2">
                     <button onclick="window.APP.ads._approveRequest('${req.id}')" class="flex-1 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-all">
                         ✅ Aprovar
                     </button>
@@ -316,8 +383,38 @@ const Ads = {
                         ❌ Rejeitar
                     </button>
                 </div>
-            </div>
-        `).join('');
+            ` : '';
+
+            return `
+                <div class="bg-slate-900/50 p-4 rounded-xl border ${meta.border}">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="text-sm font-bold text-white">${window.escapeHtml(req.title || 'Sem título')}</h4>
+                            <span class="text-xs text-yellow-400 font-semibold">👤 ${window.escapeHtml(req.profiles?.full_name || 'Vendedor')}</span>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <span class="text-[10px] text-slate-500 block">${typeLabel[req.type] || req.type}</span>
+                            <span class="text-[10px] font-bold ${meta.color}">${meta.label}</span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-400 mb-2">${window.escapeHtml(req.description || '—')}</p>
+
+                    ${req.link ? `<p class="text-xs text-blue-400 mb-3 break-all">🔗 ${window.escapeHtml(req.link)}</p>` : ''}
+
+                    ${req.status === 'rejected' && req.rejection_reason ? `
+                        <div class="bg-red-900/20 border border-red-500/30 p-3 rounded-lg mb-3">
+                            <p class="text-xs text-red-400"><strong>Motivo:</strong> ${window.escapeHtml(req.rejection_reason)}</p>
+                        </div>
+                    ` : ''}
+
+                    <div class="text-[10px] text-slate-600 mb-1">📅 Solicitado em ${new Date(req.created_at).toLocaleString('pt-BR')}</div>
+                    ${req.status !== 'pending' ? `<div class="text-[10px] text-slate-600">✔ Decidido em ${new Date(req.updated_at || req.created_at).toLocaleString('pt-BR')}</div>` : ''}
+
+                    ${actionButtons}
+                </div>
+            `;
+        }).join('');
     },
 
     // ===== ADMIN: APROVAR SOLICITAÇÃO =====
@@ -333,7 +430,7 @@ const Ads = {
             if (error) throw error;
 
             log('✅ Solicitação aprovada', 'success');
-            alert('✅ Solicitação aprovada! Lembre-se de publicar o anúncio real na aba acima, usando as informações da solicitação.');
+            alert('✅ Solicitação aprovada! Lembre-se de publicar o anúncio real na aba acima, usando as informações da solicitação.\n\nVocê pode encontrá-la depois na aba "✅ Aprovadas" aqui embaixo.');
             await this._loadAdminRequests();
         } catch (err) {
             log(`❌ Erro ao aprovar: ${err.message}`, 'error');
@@ -405,8 +502,6 @@ const Ads = {
         try {
             if (!window._supabase) throw new Error('Supabase não disponível');
 
-            // ✅ FIX v6.2: relê o cargo atual toda vez — nunca mais usa
-            // um valor congelado de antes do login.
             this.currentRole = this._getRole();
 
             log('📥 Carregando anúncios...', 'info');
@@ -429,8 +524,6 @@ const Ads = {
                 this.showFallback();
             }
 
-            // ✅ FIX v6.2: configura a UI de vendedor (formulário de
-            // solicitação) toda vez, com o cargo atualizado.
             if (this.currentRole === 'seller') {
                 this._setupVendorUI();
             }

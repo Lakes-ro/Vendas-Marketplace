@@ -1,23 +1,20 @@
 /**
- * PRODUCTS.JS v4.4
+ * PRODUCTS.JS v4.5
  * ✅ Removido código do script-vitrine.js que estava colado no final por engano
  * ✅ saveProductDirect() para botão onclick sem form
  * ✅ fetchAll() com filtro status=active
  * ✅ render() com try/catch completo
- * ✅ produtos de vendedor offline (is_online = false em vendor_status)
- *    aparecem marcados no marketplace, com o botão de compra desabilitado
+ * ✅ produtos de vendedor offline aparecem marcados, botão de compra desabilitado
  * ✅ botão "Falar com o Vendedor" no card do produto
- * ✅ v4.3: min_stock (Estoque Mínimo) agora é lido, salvo e editado
- *    corretamente — necessário pro índice de Estoque Crítico do BI
- * ✅ v4.4 FIX CRÍTICO: ao EDITAR um produto, o código sempre incluía
- *    "owner_id: window.APP.auth.userId" no payload do UPDATE — ou seja,
- *    o dono do produto virava quem estava SALVANDO a edição, não quem
- *    era o dono de verdade. Na prática: se o Admin Supremo editasse
- *    (mesmo só o título) um produto de outro vendedor, o produto
- *    "roubava" a posse pro Admin — sumia do estoque do vendedor
- *    original e aparecia no do Admin. Agora "owner_id" só é definido
- *    ao CRIAR um produto novo; ao editar, o dono original nunca é
- *    tocado.
+ * ✅ v4.3: min_stock (Estoque Mínimo) lido/salvo/editado corretamente
+ * ✅ v4.4: owner_id nunca é sobrescrito ao editar um produto (correção
+ *    de segurança — só é definido na criação de um produto novo)
+ * ✅ v4.5 PERFORMANCE: removido um atraso artificial de 300ms
+ *    (setTimeout) antes de renderizar as listas de Admin/Estoque depois
+ *    de carregar os produtos. Esse delay não tinha mais função real —
+ *    Auth já termina de carregar ANTES de Products.fetchAll() rodar (ver
+ *    ordem de inicialização em app.js) — e só deixava a tela demorando
+ *    mais pra aparecer sem necessidade.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -57,13 +54,13 @@ const Products = {
 
             this.render();
 
+            // ✅ FIX v4.5: renderiza direto, sem esperar 300ms à toa.
+            // window.APP.auth já está pronto nesse ponto da inicialização.
             if (window.APP?.auth?.userId) {
-                setTimeout(() => {
-                    this.renderAdmin();
-                    if (window.APP.auth.role === 'seller') {
-                        this.renderSeller();
-                    }
-                }, 300);
+                this.renderAdmin();
+                if (window.APP.auth.role === 'seller') {
+                    this.renderSeller();
+                }
             }
 
             log(`✅ ${this.products.length} produtos carregados`, 'success');
@@ -289,13 +286,11 @@ const Products = {
 
             this.editingId = null;
 
-            // Resetar campos manualmente (sem form.reset())
             ['p-name', 'p-price', 'p-cost', 'p-stock', 'p-desc'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
 
-            // Estoque mínimo tem valor padrão (5), não fica vazio
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = 5;
 
@@ -349,7 +344,6 @@ const Products = {
         }
     },
 
-    // ✅ Versão Direct — chamada pelo botão onclick sem form
     async saveProductDirect() {
         const btn = document.getElementById('btn-save');
         const originalText = btn?.innerText;
@@ -400,10 +394,8 @@ const Products = {
                 log(`📤 Imagem enviada: ${fileName}`, 'success');
             }
 
-            // ✅ FIX v4.4: "owner_id" NÃO entra mais aqui por padrão.
-            // Só é adicionado explicitamente no ramo de CRIAÇÃO (insert),
-            // logo abaixo. Assim, uma edição nunca mexe em quem é o dono
-            // do produto — nem por acidente.
+            // owner_id NÃO entra aqui por padrão. Só é adicionado
+            // explicitamente no ramo de CRIAÇÃO (insert), logo abaixo.
             const productData = {
                 name,
                 price,
@@ -423,9 +415,9 @@ const Products = {
                     throw new Error('Você não tem permissão para editar este produto');
                 }
 
-                // ✅ FIX v4.4: UPDATE nunca inclui owner_id — o dono
-                // original do produto é preservado, mesmo quando quem
-                // está editando é o Admin Supremo.
+                // UPDATE nunca inclui owner_id — o dono original do
+                // produto é preservado (o banco também garante isso via
+                // gatilho, como segunda camada de defesa).
                 result = await _supabase
                     .from('products')
                     .update(productData)
@@ -434,8 +426,6 @@ const Products = {
                 log('✅ Produto atualizado', 'success');
                 alert('✅ Produto atualizado!');
             } else {
-                // Só na CRIAÇÃO de um produto novo é que o dono é quem
-                // está cadastrando.
                 productData.owner_id = window.APP.auth.userId;
 
                 result = await _supabase
@@ -462,7 +452,6 @@ const Products = {
         }
     },
 
-    // Mantido para compatibilidade retroativa (admin.js ainda usa saveProduct via form)
     async saveProduct(event) {
         if (event) event.preventDefault();
         await this.saveProductDirect();

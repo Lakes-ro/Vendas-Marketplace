@@ -1,20 +1,20 @@
 /**
- * BI.JS v9.2
- * ✅ Gráfico "Top Produtos" com legenda HTML própria (v7.2)
- * ✅ Fallback de custo (unit_cost) via cost_price atual do produto (v7.1)
- * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp +
- *    valores desenhados nos gráficos (v8.0)
- * ✅ Formatação R$ no padrão brasileiro (v8.1)
- * ✅ BI escopado por role — vendedor só vê o próprio desempenho (v9.0)
- * ✅ Detalhamento mostra forma de pagamento, badge "✔ Pago"/"Aguardando",
- *    link de comprovante e confirmação de pagamento (v9.1)
- * ✅ v9.2 NOVO/FIX CRÍTICO: o HTML já tinha os cartões e seções de
- *    Resumo Executivo, DRE, Ticket Médio, comparação ▲/▼ com o período
- *    anterior, Curva ABC, Estoque Crítico, Giro de Estoque e Ranking de
- *    Vendedores — mas as funções que preenchem esses elementos nunca
- *    tinham sido escritas (regressão de uma versão anterior). Por isso
- *    nenhum índice aparecia e os botões "ⓘ" não faziam nada (a função
- *    toggleInfo() nem existia). Esta versão implementa tudo isso.
+ * BI.JS v9.3
+ * ✅ Gráfico "Top Produtos" com legenda HTML própria
+ * ✅ Fallback de custo (unit_cost) via cost_price atual do produto
+ * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp
+ * ✅ BI escopado por role — vendedor só vê o próprio desempenho
+ * ✅ Detalhamento com forma de pagamento, badge de status, comprovante
+ *    e confirmação de pagamento
+ * ✅ v9.2: Resumo Executivo, DRE, Ticket Médio, deltas ▲/▼, Curva ABC,
+ *    Estoque Crítico, Giro de Estoque, Ranking de Vendedores e
+ *    toggleInfo() implementados
+ * ✅ v9.3 PERFORMANCE: a tabela de custo dos produtos (usada pra
+ *    calcular lucro) era remontada do zero 3 VEZES a cada atualização
+ *    de tela — uma vez em renderKPIs, outra em renderDRE, outra no
+ *    gráfico de faturamento — cada uma percorrendo a lista inteira de
+ *    produtos de novo. Agora é montada UMA ÚNICA VEZ por atualização
+ *    (em _renderFiltered) e reaproveitada nas três.
  */
 
 // ── Plugin custom de "data labels" (valores desenhados no próprio gráfico) ──
@@ -78,7 +78,7 @@ const BI = {
     _loadToken: 0,
     _allOrders: [],
     currentPeriod: null,
-    _viewRole: null, // 'supreme' ou 'seller' — define escopo dos dados
+    _viewRole: null,
     _lastKPIs: null,
 
     _formatBRL(value, decimals = 2) {
@@ -90,11 +90,6 @@ const BI = {
         });
     },
 
-    /**
-     * ✅ NOVO (v9.2): liga/desliga os parágrafos explicativos "ⓘ" de
-     * cada métrica. Sem isso, os botões de informação espalhados pelo
-     * dashboard não faziam absolutamente nada ao serem clicados.
-     */
     toggleInfo(id) {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden');
@@ -237,24 +232,27 @@ const BI = {
             return d >= range.start && d <= range.end;
         });
 
-        // ✅ NOVO (v9.2): período anterior de mesma duração, pra calcular
-        // as setinhas ▲/▼ dos cartões e do resumo executivo.
         const prevRange = this._getPreviousRange(range);
         const prevFiltered = (this._allOrders || []).filter(o => {
             const d = new Date(o.created_at);
             return d >= prevRange.start && d <= prevRange.end;
         });
 
+        // ✅ FIX v9.3 (performance): monta o mapa de custo UMA VEZ aqui,
+        // e passa pronto pra quem precisar — em vez de cada função
+        // (KPIs, DRE, gráfico) reconstruir a mesma tabela sozinha.
+        const costFallback = this._buildCostFallbackMap();
+
         this._syncPeriodButtonsUI(range);
-        this.renderKPIs(filtered, prevFiltered);
+        this.renderKPIs(filtered, prevFiltered, costFallback);
         this.renderExecutiveSummary(filtered, prevFiltered, range);
-        this.renderDRE(filtered);
+        this.renderDRE(filtered, costFallback);
         this.renderOrderList(filtered);
         this.renderABC(filtered);
         this.renderCriticalStock();
         this.renderStockTurnover(filtered, range);
         this.renderVendorRanking(filtered);
-        await this.prepareCharts(filtered, token, range);
+        await this.prepareCharts(filtered, token, range, costFallback);
     },
 
     _getPeriodRange(period) {
@@ -301,10 +299,6 @@ const BI = {
         }
     },
 
-    /**
-     * ✅ NOVO (v9.2): período imediatamente anterior, com a mesma duração
-     * do período selecionado — usado só para comparação (▲/▼).
-     */
     _getPreviousRange(range) {
         const duration = range.end.getTime() - range.start.getTime();
         const prevEnd = new Date(range.start.getTime() - 1);
@@ -348,9 +342,9 @@ const BI = {
         return { total, lucro, margem, itemsSold, ticketMedio, count: orders.length };
     },
 
-    renderKPIs(orders, prevOrders = []) {
+    renderKPIs(orders, prevOrders = [], costFallback = null) {
         try {
-            const costFallback = this._buildCostFallbackMap();
+            costFallback = costFallback || this._buildCostFallbackMap();
 
             const cur = this._calcTotals(orders, costFallback);
             const prev = this._calcTotals(prevOrders, costFallback);
@@ -381,12 +375,6 @@ const BI = {
         }
     },
 
-    /**
-     * ✅ NOVO (v9.2): desenha a comparação "▲ 12% vs período anterior"
-     * embaixo de cada cartão do topo. Quando não há período anterior
-     * pra comparar (ex: primeira venda do vendedor), mostra um texto
-     * neutro em vez de uma conta sem sentido tipo "▲ Infinity%".
-     */
     _renderDelta(elId, curVal, prevVal, isPercentPoint = false) {
         const el = document.getElementById(elId);
         if (!el) return;
@@ -411,10 +399,6 @@ const BI = {
         el.innerHTML = `<span class="${color}">${arrow} ${Math.abs(pct).toFixed(1)}${suffix}</span> <span class="text-slate-600">vs período anterior</span>`;
     },
 
-    /**
-     * ✅ NOVO (v9.2): parágrafo em texto corrido explicando o cenário do
-     * período, sem precisar interpretar gráfico nenhum.
-     */
     renderExecutiveSummary(orders, prevOrders, range) {
         const el = document.getElementById('bi-executive-summary');
         if (!el) return;
@@ -440,15 +424,12 @@ const BI = {
             Foram <strong>${k.count}</strong> pedido(s), com ticket médio de <strong>R$ ${this._formatBRL(k.ticketMedio)}</strong>.`;
     },
 
-    /**
-     * ✅ NOVO (v9.2): Demonstrativo de Resultado simplificado — receita,
-     * custo do que foi vendido, e o que sobrou de lucro bruto.
-     */
-    renderDRE(orders) {
+    renderDRE(orders, costFallback = null) {
         const el = document.getElementById('bi-dre');
         if (!el) return;
 
-        const costFallback = this._buildCostFallbackMap();
+        costFallback = costFallback || this._buildCostFallbackMap();
+
         const receita = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
         const cpv = orders.reduce((sum, o) => sum + (o.order_items || []).reduce((s, i) => {
             const cost = i.unit_cost || costFallback[i.product_id] || 0;
@@ -557,10 +538,6 @@ const BI = {
         }
     },
 
-    /**
-     * ✅ NOVO (v9.2): Curva ABC — classifica produtos pela contribuição
-     * acumulada no faturamento do período (A ≤80%, B ≤95%, C o resto).
-     */
     renderABC(orders) {
         const container = document.getElementById('bi-abc-table');
         if (!container) return;
@@ -619,11 +596,6 @@ const BI = {
         }).join('');
     },
 
-    /**
-     * ✅ NOVO (v9.2): Estoque Crítico — produtos com estoque igual ou
-     * abaixo do mínimo configurado no cadastro (products.min_stock).
-     * Não depende do período selecionado (é sobre o estoque agora).
-     */
     renderCriticalStock() {
         const container = document.getElementById('bi-low-stock-list');
         if (!container) return;
@@ -661,12 +633,6 @@ const BI = {
             `).join('');
     },
 
-    /**
-     * ✅ NOVO (v9.2): Giro de Estoque — com base no ritmo de vendas do
-     * período selecionado, estima quantos dias o estoque atual ainda
-     * dura. Produto sem nenhuma venda no período aparece como
-     * "estoque parado".
-     */
     renderStockTurnover(orders, range) {
         const container = document.getElementById('bi-stock-turnover');
         if (!container) return;
@@ -734,9 +700,6 @@ const BI = {
         }).join('');
     },
 
-    /**
-     * ✅ NOVO (v9.2): Ranking de Vendedores — só pro Admin Supremo.
-     */
     renderVendorRanking(orders) {
         const wrapper = document.getElementById('bi-vendor-ranking-wrapper');
         const container = document.getElementById('bi-vendor-ranking');
@@ -790,9 +753,9 @@ const BI = {
         `).join('');
     },
 
-    async prepareCharts(orders, token, range) {
+    async prepareCharts(orders, token, range, costFallback = null) {
         try {
-            this.renderRevenueChart(orders, range);
+            this.renderRevenueChart(orders, range, costFallback);
             await this.renderTopProductsChart(orders, token);
         } catch (err) {
             log(`❌ Erro ao preparar gráficos: ${err.message}`, 'error');
@@ -861,7 +824,7 @@ const BI = {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     },
 
-    renderRevenueChart(orders, range) {
+    renderRevenueChart(orders, range, costFallback = null) {
         try {
             const ctx = document.getElementById('chart-revenue');
             if (!ctx) return;
@@ -870,7 +833,7 @@ const BI = {
             if (titleEl) titleEl.textContent = `📈 Faturamento (${range.label})`;
 
             const buckets = this._buildBuckets(range.start, range.end);
-            const costFallback = this._buildCostFallbackMap();
+            costFallback = costFallback || this._buildCostFallbackMap();
 
             const revenueMap = {};
             const profitMap = {};
