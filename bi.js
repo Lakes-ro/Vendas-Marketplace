@@ -1,20 +1,23 @@
 /**
- * BI.JS v9.3
+ * BI.JS v9.4
  * ✅ Gráfico "Top Produtos" com legenda HTML própria
  * ✅ Fallback de custo (unit_cost) via cost_price atual do produto
  * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp
  * ✅ BI escopado por role — vendedor só vê o próprio desempenho
  * ✅ Detalhamento com forma de pagamento, badge de status, comprovante
  *    e confirmação de pagamento
- * ✅ v9.2: Resumo Executivo, DRE, Ticket Médio, deltas ▲/▼, Curva ABC,
- *    Estoque Crítico, Giro de Estoque, Ranking de Vendedores e
- *    toggleInfo() implementados
+ * ✅ v9.2: Ticket Médio, deltas ▲/▼, Curva ABC, Estoque Crítico, Giro de
+ *    Estoque, Ranking de Vendedores e toggleInfo() implementados
  * ✅ v9.3 PERFORMANCE: a tabela de custo dos produtos (usada pra
- *    calcular lucro) era remontada do zero 3 VEZES a cada atualização
- *    de tela — uma vez em renderKPIs, outra em renderDRE, outra no
- *    gráfico de faturamento — cada uma percorrendo a lista inteira de
- *    produtos de novo. Agora é montada UMA ÚNICA VEZ por atualização
- *    (em _renderFiltered) e reaproveitada nas três.
+ *    calcular lucro) é montada UMA ÚNICA VEZ por atualização de tela
+ *    (em _renderFiltered) e reaproveitada, em vez de cada função
+ *    reconstruir a mesma tabela sozinha.
+ * ✅ v9.4 FIX (redundância): "Resumo Executivo" (texto) e "DRE"
+ *    (tabela) foram REMOVIDOS — os dois mostravam exatamente os mesmos
+ *    2 números (faturamento e lucro) que já estão nos cartões de KPI,
+ *    só reformatados. No lugar do DRE entrou renderMarginBar(): uma
+ *    barra visual de proporção custo/lucro com leitura de saúde da
+ *    margem — informação que nenhum dos outros dois painéis mostrava.
  */
 
 // ── Plugin custom de "data labels" (valores desenhados no próprio gráfico) ──
@@ -238,15 +241,13 @@ const BI = {
             return d >= prevRange.start && d <= prevRange.end;
         });
 
-        // ✅ FIX v9.3 (performance): monta o mapa de custo UMA VEZ aqui,
-        // e passa pronto pra quem precisar — em vez de cada função
-        // (KPIs, DRE, gráfico) reconstruir a mesma tabela sozinha.
+        // ✅ v9.4: monta o mapa de custo UMA VEZ aqui, e passa pronto
+        // pra quem precisar — em vez de cada função reconstruir sozinha.
         const costFallback = this._buildCostFallbackMap();
 
         this._syncPeriodButtonsUI(range);
         this.renderKPIs(filtered, prevFiltered, costFallback);
-        this.renderExecutiveSummary(filtered, prevFiltered, range);
-        this.renderDRE(filtered, costFallback);
+        this.renderMarginBar(filtered, costFallback);
         this.renderOrderList(filtered);
         this.renderABC(filtered);
         this.renderCriticalStock();
@@ -385,7 +386,7 @@ const BI = {
         }
 
         if (!prevVal) {
-            el.innerHTML = '<span class="text-slate-500">— sem período anterior pra comparar</span>';
+            el.innerHTML = '<span class="text-slate-500">sem comparação</span>';
             return;
         }
 
@@ -396,61 +397,62 @@ const BI = {
         const color = isUp ? 'text-green-500' : 'text-red-500';
         const suffix = isPercentPoint ? 'p.p.' : '%';
 
-        el.innerHTML = `<span class="${color}">${arrow} ${Math.abs(pct).toFixed(1)}${suffix}</span> <span class="text-slate-600">vs período anterior</span>`;
+        el.innerHTML = `<span class="${color}">${arrow} ${Math.abs(pct).toFixed(1)}${suffix}</span> <span class="text-slate-600">vs anterior</span>`;
     },
 
-    renderExecutiveSummary(orders, prevOrders, range) {
-        const el = document.getElementById('bi-executive-summary');
-        if (!el) return;
-
-        if (!orders.length) {
-            el.textContent = `Nenhuma venda registrada em "${range.label}".`;
-            return;
-        }
-
-        const k = this._lastKPIs || this._calcTotals(orders, this._buildCostFallbackMap());
-        const prevTotal = prevOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
-
-        let trendText = '';
-        if (prevTotal > 0) {
-            const pct = ((k.total - prevTotal) / prevTotal) * 100;
-            trendText = pct >= 0
-                ? ` Isso é <strong class="text-green-400">${pct.toFixed(0)}% a mais</strong> que no período anterior.`
-                : ` Isso é <strong class="text-red-400">${Math.abs(pct).toFixed(0)}% a menos</strong> que no período anterior.`;
-        }
-
-        el.innerHTML = `Em <strong>${range.label}</strong>, o faturamento foi de <strong>R$ ${this._formatBRL(k.total)}</strong>,
-            com lucro de <strong>R$ ${this._formatBRL(k.lucro)}</strong> (margem de ${k.margem.toFixed(1)}%).${trendText}
-            Foram <strong>${k.count}</strong> pedido(s), com ticket médio de <strong>R$ ${this._formatBRL(k.ticketMedio)}</strong>.`;
-    },
-
-    renderDRE(orders, costFallback = null) {
-        const el = document.getElementById('bi-dre');
+    /**
+     * ✅ v9.4: substitui o Resumo Executivo (texto) + DRE (tabela), que
+     * eram REDUNDANTES entre si e com os cartões de KPI — os três
+     * mostravam exatamente os mesmos 2 números (faturamento e lucro),
+     * só em formatos diferentes. Uma barra visual mostra a MESMA conta
+     * de um jeito que os cartões não mostram (proporção visual, de
+     * relance) e adiciona uma leitura de saúde da margem que nenhum dos
+     * outros dois painéis tinha.
+     */
+    renderMarginBar(orders, costFallback = null) {
+        const el = document.getElementById('bi-margin-bar');
         if (!el) return;
 
         costFallback = costFallback || this._buildCostFallbackMap();
 
         const receita = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
+
+        if (receita <= 0) {
+            el.innerHTML = '<div class="text-slate-600 text-center py-4">Sem vendas neste período</div>';
+            return;
+        }
+
         const cpv = orders.reduce((sum, o) => sum + (o.order_items || []).reduce((s, i) => {
             const cost = i.unit_cost || costFallback[i.product_id] || 0;
             return s + (cost * (i.quantity || 1));
         }, 0), 0);
-        const lucroBruto = receita - cpv;
-        const margem = receita > 0 ? (lucroBruto / receita) * 100 : 0;
 
-        const row = (label, value, isTotal = false) => `
-            <div class="flex justify-between items-center py-2 ${isTotal ? 'border-t border-white/10 mt-2 pt-3' : ''}">
-                <span class="${isTotal ? 'font-black text-white' : 'text-slate-400'} text-sm">${label}</span>
-                <span class="${isTotal ? 'font-black text-lg' : 'font-bold'} ${value < 0 ? 'text-red-400' : 'text-slate-200'}">
-                    R$ ${this._formatBRL(value)}
-                </span>
-            </div>
-        `;
+        const custoPct = Math.max(0, Math.min(100, (cpv / receita) * 100));
+        const lucroPct = Math.max(0, 100 - custoPct);
+
+        let leitura, leituraCor;
+        if (lucroPct >= 40) { leitura = '🟢 Margem excelente'; leituraCor = 'text-green-400'; }
+        else if (lucroPct >= 25) { leitura = '🟡 Margem saudável'; leituraCor = 'text-yellow-400'; }
+        else if (lucroPct >= 10) { leitura = '🟠 Margem apertada'; leituraCor = 'text-orange-400'; }
+        else { leitura = '🔴 Margem crítica'; leituraCor = 'text-red-400'; }
 
         el.innerHTML = `
-            ${row('Receita Bruta (Faturamento)', receita)}
-            ${row('(-) Custo dos Produtos Vendidos (CPV)', -cpv)}
-            ${row(`(=) Lucro Bruto (margem de ${margem.toFixed(1)}%)`, lucroBruto, true)}
+            <div class="mb-3 flex justify-between items-center text-xs font-bold">
+                <span class="${leituraCor}">${leitura}</span>
+                <span class="text-slate-500">de cada R$ 1,00 vendido</span>
+            </div>
+            <div class="w-full h-9 rounded-full overflow-hidden flex bg-slate-800">
+                <div class="h-full flex items-center justify-center text-[11px] font-black text-white" style="width:${custoPct}%; background:#ef4444;">
+                    ${custoPct >= 12 ? custoPct.toFixed(0) + '%' : ''}
+                </div>
+                <div class="h-full flex items-center justify-center text-[11px] font-black text-white" style="width:${lucroPct}%; background:#22c55e;">
+                    ${lucroPct >= 12 ? lucroPct.toFixed(0) + '%' : ''}
+                </div>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-500 mt-2 font-semibold">
+                <span>🔴 Custo do produto</span>
+                <span>🟢 Fica de lucro</span>
+            </div>
         `;
     },
 

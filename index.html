@@ -59,7 +59,7 @@
          ⚠️ Se no futuro adicionar uma classe Tailwind nova em algum
          arquivo que ainda não usa essa classe, ela só aparece depois de
          reconstruir esse arquivo (é só pedir). Suba o "?v=" ao regerar. -->
-    <link rel="stylesheet" href="tailwind.built.css?v=1">
+    <link rel="stylesheet" href="tailwind.built.css?v=2">
 
     <!-- CHART.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -203,17 +203,13 @@
         <button class="bi-period-btn" data-period="tudo" onclick="window.APP.bi.setPeriod('tudo')">Tudo</button>
     </div>
 
-    <div id="bi-executive-summary" class="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-5 mb-8 text-sm text-blue-100 leading-relaxed">
-        Carregando resumo...
-    </div>
-
     <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
         <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-black text-slate-300">🧾 Demonstrativo de Resultado (DRE Simplificado)</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-dre')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <h3 class="text-lg font-black text-slate-300">⚖️ Custo vs. Lucro</h3>
+            <button onclick="window.APP.bi.toggleInfo('info-margin-bar')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
         </div>
-        <p id="info-dre" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">É o mesmo relatório que um contador monta pra mostrar se o negócio deu lucro ou prejuízo no período: quanto entrou, quanto custou o que foi vendido, e o que sobrou de verdade.</p>
-        <div id="bi-dre" class="space-y-1"></div>
+        <p id="info-margin-bar" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">De cada real vendido no período, quanto foi custo do produto e quanto sobrou de lucro pra você.</p>
+        <div id="bi-margin-bar"></div>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
@@ -776,7 +772,7 @@
     <script src="cart.js?v=2"></script>
     <script src="products.js?v=6"></script>
     <script src="ads.js?v=6"></script>
-    <script src="bi.js?v=7"></script>
+    <script src="bi.js?v=8"></script>
     <script src="navigation.js?v=3"></script>
     <script src="tenants.js?v=6"></script>
     <script src="orders.js?v=5"></script>
