@@ -1,5 +1,5 @@
 /**
- * PRODUCTS.JS v4.5
+ * PRODUCTS.JS v4.6
  * ✅ Removido código do script-vitrine.js que estava colado no final por engano
  * ✅ saveProductDirect() para botão onclick sem form
  * ✅ fetchAll() com filtro status=active
@@ -10,11 +10,11 @@
  * ✅ v4.4: owner_id nunca é sobrescrito ao editar um produto (correção
  *    de segurança — só é definido na criação de um produto novo)
  * ✅ v4.5 PERFORMANCE: removido um atraso artificial de 300ms
- *    (setTimeout) antes de renderizar as listas de Admin/Estoque depois
- *    de carregar os produtos. Esse delay não tinha mais função real —
- *    Auth já termina de carregar ANTES de Products.fetchAll() rodar (ver
- *    ordem de inicialização em app.js) — e só deixava a tela demorando
- *    mais pra aparecer sem necessidade.
+ *    (setTimeout) antes de renderizar as listas de Admin/Estoque
+ * ✅ v4.6 NOVO: Categorias — a coluna "category" já existia no banco
+ *    mas nunca tinha sido usada em lugar nenhum do código. Agora é
+ *    buscada, salva, editada, e a vitrine ganha um filtro por categoria
+ *    (facilita a busca do cliente).
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -22,6 +22,7 @@ const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 const Products = {
     editingId: null,
     products: [],
+    activeCategory: 'Todas', // ✅ NOVO: filtro de categoria ativo na vitrine
 
     async fetchAll() {
         try {
@@ -36,6 +37,7 @@ const Products = {
                     cost_price,
                     stock,
                     min_stock,
+                    category,
                     description,
                     image_url,
                     owner_id,
@@ -110,16 +112,25 @@ const Products = {
                 return;
             }
 
-            if (!this.products || this.products.length === 0) {
-                grid.innerHTML = '<div class="col-span-full text-slate-600 text-center py-12">Nenhum produto disponível</div>';
+            this._renderCategoryFilterBar();
+
+            const visiveis = this.activeCategory === 'Todas'
+                ? this.products
+                : this.products.filter(p => (p.category || 'Outros') === this.activeCategory);
+
+            if (!visiveis || visiveis.length === 0) {
+                grid.innerHTML = this.activeCategory === 'Todas'
+                    ? '<div class="col-span-full text-slate-600 text-center py-12">Nenhum produto disponível</div>'
+                    : `<div class="col-span-full text-slate-600 text-center py-12">Nenhum produto em "${window.escapeHtml(this.activeCategory)}" no momento</div>`;
                 return;
             }
 
-            grid.innerHTML = this.products.map(p => {
+            grid.innerHTML = visiveis.map(p => {
                 const estoque = p.stock || 0;
                 const vendorOnline = p.vendor_online !== false;
                 const disponivel = estoque > 0 && vendorOnline;
                 const vendedor = p.profiles?.full_name || 'Vendedor';
+                const categoria = p.category || 'Outros';
 
                 const waLink = window.buildWhatsAppLink ? window.buildWhatsAppLink(p.profiles?.phone) : null;
 
@@ -129,6 +140,8 @@ const Products = {
                             ? `<img src="${p.image_url}" alt="${p.name}" class="w-full h-44 object-cover rounded-2xl" onerror="if(!this.dataset.err){this.dataset.err=1;this.src=PRODUCT_PLACEHOLDER}">`
                             : `<div class="w-full h-44 bg-slate-800 rounded-2xl flex items-center justify-center text-slate-600">SEM IMAGEM</div>`
                         }
+
+                        <span class="self-start text-[10px] font-black uppercase px-2 py-1 rounded-full bg-blue-500/15 text-blue-300">${window.escapeHtml(categoria)}</span>
 
                         <h3 class="text-xl font-bold text-white">${p.name}</h3>
                         <p class="text-slate-500 text-xs line-clamp-2">${p.description || ''}</p>
@@ -174,6 +187,38 @@ const Products = {
         }
     },
 
+    /**
+     * ✅ NOVO (v4.6): desenha a barra de categorias acima da vitrine,
+     * calculada a partir das categorias que realmente existem entre os
+     * produtos ativos (não é uma lista fixa) — e um "Todas" que sempre
+     * some por cima.
+     */
+    _renderCategoryFilterBar() {
+        const bar = document.getElementById('category-filter-bar');
+        if (!bar) return;
+
+        const categorias = ['Todas', ...new Set(this.products.map(p => p.category || 'Outros'))];
+
+        bar.innerHTML = categorias.map(cat => {
+            const isActive = cat === this.activeCategory;
+            return `
+                <button onclick="window.APP.products.filterByCategory('${cat.replace(/'/g, "\\'")}')"
+                    class="px-4 py-2 rounded-full text-xs font-bold uppercase transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'}">
+                    ${window.escapeHtml(cat)}
+                </button>
+            `;
+        }).join('');
+    },
+
+    /**
+     * ✅ NOVO (v4.6): troca a categoria ativa e re-renderiza só a
+     * vitrine (não precisa buscar de novo no banco).
+     */
+    filterByCategory(category) {
+        this.activeCategory = category;
+        this.render();
+    },
+
     renderAdmin() {
         try {
             const list = document.getElementById('admin-list');
@@ -194,7 +239,8 @@ const Products = {
                 <div class="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-white/5 hover:border-blue-500/30 transition-all">
                     <div class="flex-1">
                         <span class="font-bold text-white block">${p.name}</span>
-                        <span class="text-xs text-yellow-400 font-semibold mt-1">👤 ${p.profiles?.full_name || 'Desconhecido'}</span>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 inline-block mt-1">${window.escapeHtml(p.category || 'Outros')}</span>
+                        <span class="text-xs text-yellow-400 font-semibold mt-1 block">👤 ${p.profiles?.full_name || 'Desconhecido'}</span>
                         <span class="text-xs text-slate-500 mt-1 block">R$ ${window.formatBRL(p.price)}</span>
                         <span class="text-xs ${p.stock > (p.min_stock ?? 5) ? 'text-green-500' : p.stock > 0 ? 'text-yellow-500' : 'text-red-500'} font-black mt-1 block">
                             Estoque: ${p.stock} <span class="text-slate-600 font-normal">(mín: ${p.min_stock ?? 5})</span>
@@ -243,6 +289,7 @@ const Products = {
                         : `<div class="w-full h-44 bg-slate-800 rounded-2xl flex items-center justify-center text-slate-600">SEM IMAGEM</div>`
                     }
 
+                    <span class="self-start text-[10px] font-black uppercase px-2 py-1 rounded-full bg-blue-500/15 text-blue-300">${window.escapeHtml(p.category || 'Outros')}</span>
                     <h3 class="text-xl font-bold text-white">${p.name}</h3>
                     <p class="text-slate-500 text-xs line-clamp-2">${p.description || ''}</p>
 
@@ -294,6 +341,9 @@ const Products = {
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = 5;
 
+            const categoryEl = document.getElementById('p-category');
+            if (categoryEl) categoryEl.value = '';
+
             const title = document.querySelector('#admin-modal h3');
             if (title) title.innerText = 'NOVO PRODUTO';
 
@@ -333,6 +383,9 @@ const Products = {
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = product.min_stock ?? 5;
 
+            const categoryEl = document.getElementById('p-category');
+            if (categoryEl) categoryEl.value = product.category || '';
+
             const title = document.querySelector('#admin-modal h3');
             if (title) title.innerText = `✏️ EDITAR: ${product.name}`;
 
@@ -364,9 +417,11 @@ const Products = {
 
             const name = document.getElementById('p-name')?.value?.trim();
             const price = parseFloat(document.getElementById('p-price')?.value);
+            const category = document.getElementById('p-category')?.value?.trim();
 
             if (!name) throw new Error('Nome é obrigatório');
             if (!price || price < 0) throw new Error('Preço deve ser válido');
+            if (!category) throw new Error('Selecione uma categoria');
 
             let imageUrl = null;
             const fileInput = document.getElementById('p-image');
@@ -399,6 +454,7 @@ const Products = {
             const productData = {
                 name,
                 price,
+                category,
                 cost_price: parseFloat(document.getElementById('p-cost')?.value) || 0,
                 stock: parseInt(document.getElementById('p-stock')?.value) || 0,
                 min_stock: parseInt(document.getElementById('p-min-stock')?.value) || 5,

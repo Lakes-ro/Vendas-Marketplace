@@ -59,7 +59,7 @@
          ⚠️ Se no futuro adicionar uma classe Tailwind nova em algum
          arquivo que ainda não usa essa classe, ela só aparece depois de
          reconstruir esse arquivo (é só pedir). Suba o "?v=" ao regerar. -->
-    <link rel="stylesheet" href="tailwind.built.css?v=2">
+    <link rel="stylesheet" href="tailwind.built.css?v=3">
 
     <!-- CHART.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -179,6 +179,7 @@
                 <div id="hero-ads-fallback" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800"></div>
             </div>
             <h2 class="text-3xl font-black mb-6">Marketplace</h2>
+            <div id="category-filter-bar" class="flex flex-wrap gap-2 mb-6"></div>
             <div id="product-grid" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
         </section>
 
@@ -203,13 +204,18 @@
         <button class="bi-period-btn" data-period="tudo" onclick="window.APP.bi.setPeriod('tudo')">Tudo</button>
     </div>
 
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-4">
+    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
+        <div onclick="window.APP.bi.toggleSection('margin')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
             <h3 class="text-lg font-black text-slate-300">⚖️ Custo vs. Lucro</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-margin-bar')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-margin-bar')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+                <i data-lucide="chevron-down" id="sec-margin-chevron" class="w-5 h-5 text-slate-500 transition-transform rotate-180"></i>
+            </div>
         </div>
-        <p id="info-margin-bar" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">De cada real vendido no período, quanto foi custo do produto e quanto sobrou de lucro pra você.</p>
-        <div id="bi-margin-bar"></div>
+        <div id="sec-margin-content" class="px-6 pb-6">
+            <p id="info-margin-bar" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">De cada real vendido no período, quanto foi custo do produto e quanto sobrou de lucro pra você.</p>
+            <div id="bi-margin-bar"></div>
+        </div>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
@@ -281,55 +287,80 @@
         </div>
     </div>
 
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-2">
+    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
+        <div onclick="window.APP.bi.toggleSection('abc')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
             <h3 class="text-lg font-black text-slate-300">🎯 Curva ABC de Produtos</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-abc')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-abc')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+                <i data-lucide="chevron-down" id="sec-abc-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
+            </div>
         </div>
-        <p id="info-abc" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">
-            Classifica os produtos pelo quanto cada um contribui pro faturamento. <strong class="text-white">Classe A</strong> = poucos produtos que sustentam a maior parte da receita (nunca deixe faltar estoque deles). <strong class="text-white">Classe B</strong> = contribuição intermediária. <strong class="text-white">Classe C</strong> = contribuem pouco — avalie se vale continuar tendo em estoque.
-        </p>
-        <div id="bi-abc-table" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
+        <div id="sec-abc-content" class="hidden px-6 pb-6">
+            <p id="info-abc" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">
+                Classifica os produtos pelo quanto cada um contribui pro faturamento. <strong class="text-white">Classe A</strong> = poucos produtos que sustentam a maior parte da receita (nunca deixe faltar estoque deles). <strong class="text-white">Classe B</strong> = contribuição intermediária. <strong class="text-white">Classe C</strong> = contribuem pouco — avalie se vale continuar tendo em estoque.
+            </p>
+            <div id="bi-abc-table" class="space-y-2">
+                <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
+            </div>
         </div>
     </div>
 
-    <div id="bi-vendor-ranking-wrapper" class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 hidden">
-        <div class="flex items-center justify-between mb-2">
+    <div id="bi-vendor-ranking-wrapper" class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8 hidden">
+        <div onclick="window.APP.bi.toggleSection('ranking')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
             <h3 class="text-lg font-black text-slate-300">🏆 Ranking de Vendedores</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-ranking')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-ranking')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+                <i data-lucide="chevron-down" id="sec-ranking-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
+            </div>
         </div>
-        <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
-        <div id="bi-vendor-ranking" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
+        <div id="sec-ranking-content" class="hidden px-6 pb-6">
+            <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
+            <div id="bi-vendor-ranking" class="space-y-2">
+                <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
+            </div>
         </div>
     </div>
 
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-2">
+    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
+        <div onclick="window.APP.bi.toggleSection('stock')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
             <h3 class="text-lg font-black text-red-400">⚠️ Estoque Crítico</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-stock')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-stock')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+                <i data-lucide="chevron-down" id="sec-stock-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
+            </div>
         </div>
-        <p id="info-stock" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Produtos com estoque igual ou abaixo do mínimo configurado no cadastro — hora de repor antes que acabe e você perca vendas.</p>
-        <div id="bi-low-stock-list" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Carregando...</div>
+        <div id="sec-stock-content" class="hidden px-6 pb-6">
+            <p id="info-stock" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Produtos com estoque igual ou abaixo do mínimo configurado no cadastro — hora de repor antes que acabe e você perca vendas.</p>
+            <div id="bi-low-stock-list" class="space-y-2">
+                <div class="text-slate-600 text-center py-6">Carregando...</div>
+            </div>
         </div>
     </div>
 
-    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
-        <div class="flex items-center justify-between mb-2">
+    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
+        <div onclick="window.APP.bi.toggleSection('turnover')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
             <h3 class="text-lg font-black text-slate-300">📦 Giro de Estoque — Dias de Cobertura</h3>
-            <button onclick="window.APP.bi.toggleInfo('info-turnover')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+            <div class="flex items-center gap-3 flex-shrink-0">
+                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-turnover')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+                <i data-lucide="chevron-down" id="sec-turnover-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
+            </div>
         </div>
-        <p id="info-turnover" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Com base no ritmo de vendas do período selecionado, mostra quantos dias o estoque atual de cada produto ainda vai durar. Poucos dias restantes = repor com urgência. Produtos sem nenhuma venda aparecem como "estoque parado" — candidatos a promoção ou liquidação.</p>
-        <div id="bi-stock-turnover" class="space-y-2">
-            <div class="text-slate-600 text-center py-6">Carregando...</div>
+        <div id="sec-turnover-content" class="hidden px-6 pb-6">
+            <p id="info-turnover" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Com base no ritmo de vendas do período selecionado, mostra quantos dias o estoque atual de cada produto ainda vai durar. Poucos dias restantes = repor com urgência. Produtos sem nenhuma venda aparecem como "estoque parado" — candidatos a promoção ou liquidação.</p>
+            <div id="bi-stock-turnover" class="space-y-2">
+                <div class="text-slate-600 text-center py-6">Carregando...</div>
+            </div>
         </div>
     </div>
 
-    <div class="mb-6">
-        <h3 class="text-lg font-black text-slate-300 mb-4">📋 Detalhamento</h3>
-        <div id="bi-orders-detail" class="space-y-3"></div>
+    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-6">
+        <div onclick="window.APP.bi.toggleSection('orders')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
+            <h3 class="text-lg font-black text-slate-300">📋 Detalhamento de Pedidos</h3>
+            <i data-lucide="chevron-down" id="sec-orders-chevron" class="w-5 h-5 text-slate-500 transition-transform flex-shrink-0"></i>
+        </div>
+        <div id="sec-orders-content" class="hidden px-6 pb-6">
+            <div id="bi-orders-detail" class="space-y-3"></div>
+        </div>
     </div>
 </section>
 
@@ -721,6 +752,19 @@
             <h3 class="text-2xl font-black mb-6">NOVO PRODUTO</h3>
             <form data-form="product" class="space-y-4">
                 <input id="p-name" type="text" placeholder="Nome do Produto" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
+                <select id="p-category" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white" required>
+                    <option value="">Selecione a Categoria</option>
+                    <option value="Alimentos">🍎 Alimentos</option>
+                    <option value="Bebidas">🥤 Bebidas</option>
+                    <option value="Roupas e Acessórios">👕 Roupas e Acessórios</option>
+                    <option value="Eletrônicos">📱 Eletrônicos</option>
+                    <option value="Casa e Decoração">🏠 Casa e Decoração</option>
+                    <option value="Beleza e Higiene">🧴 Beleza e Higiene</option>
+                    <option value="Brinquedos">🧸 Brinquedos</option>
+                    <option value="Livros e Papelaria">📚 Livros e Papelaria</option>
+                    <option value="Serviços">🛠️ Serviços</option>
+                    <option value="Outros">📦 Outros</option>
+                </select>
                 <input id="p-price" type="number" step="0.01" placeholder="Preço de Venda" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                 <input id="p-cost" type="number" step="0.01" placeholder="Custo" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
                 <input id="p-stock" type="number" placeholder="Estoque" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
@@ -770,9 +814,9 @@
     <script src="auth.js?v=6"></script>
     <script src="store-status.js?v=2"></script>
     <script src="cart.js?v=2"></script>
-    <script src="products.js?v=6"></script>
+    <script src="products.js?v=7"></script>
     <script src="ads.js?v=6"></script>
-    <script src="bi.js?v=8"></script>
+    <script src="bi.js?v=9"></script>
     <script src="navigation.js?v=3"></script>
     <script src="tenants.js?v=6"></script>
     <script src="orders.js?v=5"></script>

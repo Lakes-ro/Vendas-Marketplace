@@ -1,5 +1,5 @@
 /**
- * BI.JS v9.4
+ * BI.JS v9.5
  * ✅ Gráfico "Top Produtos" com legenda HTML própria
  * ✅ Fallback de custo (unit_cost) via cost_price atual do produto
  * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp
@@ -8,16 +8,13 @@
  *    e confirmação de pagamento
  * ✅ v9.2: Ticket Médio, deltas ▲/▼, Curva ABC, Estoque Crítico, Giro de
  *    Estoque, Ranking de Vendedores e toggleInfo() implementados
- * ✅ v9.3 PERFORMANCE: a tabela de custo dos produtos (usada pra
- *    calcular lucro) é montada UMA ÚNICA VEZ por atualização de tela
- *    (em _renderFiltered) e reaproveitada, em vez de cada função
- *    reconstruir a mesma tabela sozinha.
- * ✅ v9.4 FIX (redundância): "Resumo Executivo" (texto) e "DRE"
- *    (tabela) foram REMOVIDOS — os dois mostravam exatamente os mesmos
- *    2 números (faturamento e lucro) que já estão nos cartões de KPI,
- *    só reformatados. No lugar do DRE entrou renderMarginBar(): uma
- *    barra visual de proporção custo/lucro com leitura de saúde da
- *    margem — informação que nenhum dos outros dois painéis mostrava.
+ * ✅ v9.3 PERFORMANCE: custo dos produtos calculado 1x por atualização
+ * ✅ v9.4: removidos Resumo Executivo e DRE (redundantes com os
+ *    cartões de KPI) — substituídos pela barra visual de Custo vs Lucro
+ * ✅ v9.5 NOVO: relatórios (Curva ABC, Ranking, Estoque Crítico, Giro
+ *    de Estoque, Detalhamento) agora abrem/fecham individualmente
+ *    (toggleSection), em vez de tudo aberto o tempo todo obrigando a
+ *    rolar a tela inteira pra achar um relatório específico.
  */
 
 // ── Plugin custom de "data labels" (valores desenhados no próprio gráfico) ──
@@ -96,6 +93,23 @@ const BI = {
     toggleInfo(id) {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('hidden');
+    },
+
+    /**
+     * ✅ NOVO (v9.5): abre/fecha cada relatório do BI (Curva ABC,
+     * Estoque Crítico, Giro de Estoque, Ranking de Vendedores,
+     * Detalhamento) individualmente — em vez de tudo aberto o tempo
+     * todo, obrigando a pessoa a rolar a tela inteira pra achar um
+     * relatório específico. Fecham por padrão; "Custo vs. Lucro" já
+     * abre aberto por ser compacto.
+     */
+    toggleSection(key) {
+        const content = document.getElementById(`sec-${key}-content`);
+        const chevron = document.getElementById(`sec-${key}-chevron`);
+        if (!content) return;
+
+        const nowHidden = content.classList.toggle('hidden');
+        if (chevron) chevron.classList.toggle('rotate-180', !nowHidden);
     },
 
     async loadDashboard() {
