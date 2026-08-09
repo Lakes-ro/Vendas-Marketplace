@@ -7,41 +7,22 @@
     <meta name="description" content="Estação Ityrapuan - Marketplace com BI integrado">
     <title>Estação Ityrapuan | Business Intelligence</title>
 
-    <!-- ✅ PERFORMANCE + PWA: limpeza de Service Worker fantasma/cache
-         antigo agora roda UMA ÚNICA VEZ por aparelho (marcada com uma
-         flag no localStorage), não em toda visita como antes. Antes
-         disso, TODA carga de página apagava todo o cache e desregistrava
-         o Service Worker, então nenhuma visita repetida aproveitava
-         cache de nada. Além disso, o Service Worker (sw.js) agora é de
-         fato registrado — sem isso o Chrome/Android nunca considera o
-         app "instalável". Precisa continuar sendo o PRIMEIRO script. -->
+    <!-- ✅ mata qualquer Service Worker antigo + limpa todos os caches.
+         Resolve o bug de "preciso limpar cache toda vez que troco de conta"
+         (instalações antigas como PWA deixam um Service Worker "fantasma"
+         servindo JS desatualizado pra sempre, já que nada no código atual
+         registra ou atualiza ele). Precisa ser o PRIMEIRO script da página. -->
     <script>
-        (function () {
-            const CLEANUP_FLAG = 'ityrapuan_sw_cleanup_v1_done';
-            const jaLimpou = localStorage.getItem(CLEANUP_FLAG);
-
-            function registrarSW() {
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('sw.js').catch(err => {
-                        console.warn('Falha ao registrar Service Worker:', err);
-                    });
-                }
-            }
-
-            if (!jaLimpou && 'serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations()
-                    .then(regs => regs.forEach(reg => reg.unregister()))
-                    .then(() => 'caches' in window
-                        ? caches.keys().then(names => Promise.all(names.map(n => caches.delete(n))))
-                        : null)
-                    .then(() => {
-                        localStorage.setItem(CLEANUP_FLAG, '1');
-                        registrarSW();
-                    });
-            } else {
-                registrarSW();
-            }
-        })();
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => {
+                regs.forEach(reg => reg.unregister());
+            });
+        }
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
     </script>
 
     <!-- PWA -->
@@ -50,16 +31,13 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
 
     <!-- ESTILOS -->
+    <!-- ✅ ?v=2 força o navegador a buscar a versão mais recente do CSS
+         (novo selo de notificação de venda). Suba esse número toda vez
+         que publicar uma mudança em style.css. -->
     <link rel="stylesheet" href="style.css?v=4">
 
-    <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
-         (26KB), gerado escaneando todo o projeto — no lugar do script
-         que baixava o compilador inteiro e recompilava TODO o CSS no
-         celular, a cada carregamento de página.
-         ⚠️ Se no futuro adicionar uma classe Tailwind nova em algum
-         arquivo que ainda não usa essa classe, ela só aparece depois de
-         reconstruir esse arquivo (é só pedir). Suba o "?v=" ao regerar. -->
-    <link rel="stylesheet" href="tailwind.built.css?v=3">
+    <!-- TAILWIND CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- CHART.JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -75,6 +53,7 @@
         #preview-title { word-break: break-word; }
         #preview-text  { word-break: break-word; white-space: pre-wrap; }
 
+        /* Botão de logout com info do usuário */
         #logout-btn {
             min-height: 56px;
             align-items: center;
@@ -97,54 +76,65 @@
         </div>
 
         <nav class="flex-1 space-y-2">
+            <!-- LOJA - Sempre visível -->
             <button class="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="market">
                 <i data-lucide="shopping-bag" class="flex-shrink-0"></i>
                 <span class="block font-bold text-sm group-hover:text-white">LOJA</span>
             </button>
 
+            <!-- BI - Vendedor / Supremo -->
             <button id="bi-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="bi">
                 <i data-lucide="bar-chart-3" class="flex-shrink-0 text-green-500"></i>
                 <span class="block font-bold text-sm group-hover:text-white">BI / GESTÃO</span>
             </button>
 
+            <!-- ADMIN - Apenas Admin Supremo -->
             <button id="admin-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="admin">
                 <i data-lucide="shield-alert" class="flex-shrink-0 text-red-500"></i>
                 <span class="block font-bold text-sm text-red-500 group-hover:text-red-400">ADMIN</span>
             </button>
 
+            <!-- ESTOQUE - Apenas Vendedor -->
             <button id="seller-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="seller">
                 <i data-lucide="package" class="flex-shrink-0 text-blue-500"></i>
                 <span class="block font-bold text-sm text-blue-500 group-hover:text-blue-400">ESTOQUE</span>
             </button>
 
+            <!-- ANÚNCIOS - Apenas Supremo -->
             <button id="ads-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="ads">
                 <i data-lucide="megaphone" class="flex-shrink-0 text-yellow-500"></i>
                 <span class="block font-bold text-sm text-yellow-500 group-hover:text-yellow-400">ANÚNCIOS</span>
             </button>
 
+            <!-- SOLICITAÇÕES DE ANÚNCIO - Apenas Vendedor -->
             <button id="ads-requests-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="ads-requests">
                 <i data-lucide="mail" class="flex-shrink-0 text-orange-500"></i>
                 <span class="block font-bold text-sm text-orange-500 group-hover:text-orange-400">SOLICITAÇÕES</span>
             </button>
 
+            <!-- STATUS DA LOJA - Apenas Vendedor -->
             <button id="vendor-settings-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="vendor-settings">
                 <i data-lucide="settings" class="flex-shrink-0 text-cyan-500"></i>
                 <span class="block font-bold text-sm text-cyan-500 group-hover:text-cyan-400">STATUS DA LOJA</span>
             </button>
 
+            <!-- VENDEDORES - Apenas Supremo -->
             <button id="tenants-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="tenants">
                 <i data-lucide="building-2" class="flex-shrink-0 text-purple-500"></i>
                 <span class="block font-bold text-sm text-purple-500 group-hover:text-purple-400">VENDEDORES</span>
             </button>
         </nav>
 
+        <!-- BOTÕES DE AÇÃO -->
         <div class="flex flex-col gap-2 mt-auto">
+            <!-- Carrinho -->
             <button class="relative p-4 bg-blue-600 rounded-2xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 group" data-action="toggle-cart">
                 <i data-lucide="shopping-cart" class="text-white flex-shrink-0"></i>
                 <span id="cart-count" class="absolute -top-1 -right-1 bg-white text-blue-600 text-[10px] px-1.5 py-0.5 rounded-full font-black">0</span>
                 <span class="block text-white font-bold text-xs">CARRINHO</span>
             </button>
 
+            <!-- Login (anônimo) -->
             <button id="login-btn"
                 class="w-full flex items-center gap-2 p-4 rounded-2xl bg-green-600 hover:bg-green-500 text-white font-bold text-xs uppercase transition-all justify-center lg:justify-start"
                 data-action="open-login">
@@ -152,6 +142,7 @@
                 <span class="block">Entrar</span>
             </button>
 
+            <!-- Conta (logado) -->
             <button id="logout-btn"
                 class="w-full hidden flex items-center gap-3 p-3 rounded-2xl border border-white/5 text-slate-400 font-bold text-xs transition-all justify-center lg:justify-start"
                 data-action="open-profile"
@@ -160,6 +151,7 @@
                 <span class="block">Sair</span>
             </button>
 
+            <!-- ✅ Link discreto pra Política de Privacidade -->
             <a href="privacidade.html" class="w-full text-center text-[10px] text-slate-600 hover:text-slate-400 font-bold py-1 transition-all hidden lg:block">
                 Política de Privacidade
             </a>
@@ -179,7 +171,6 @@
                 <div id="hero-ads-fallback" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800"></div>
             </div>
             <h2 class="text-3xl font-black mb-6">Marketplace</h2>
-            <div id="category-filter-bar" class="flex flex-wrap gap-2 mb-6"></div>
             <div id="product-grid" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
         </section>
 
@@ -204,20 +195,24 @@
         <button class="bi-period-btn" data-period="tudo" onclick="window.APP.bi.setPeriod('tudo')">Tudo</button>
     </div>
 
-    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
-        <div onclick="window.APP.bi.toggleSection('margin')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
-            <h3 class="text-lg font-black text-slate-300">⚖️ Custo vs. Lucro</h3>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-margin-bar')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-                <i data-lucide="chevron-down" id="sec-margin-chevron" class="w-5 h-5 text-slate-500 transition-transform rotate-180"></i>
-            </div>
-        </div>
-        <div id="sec-margin-content" class="px-6 pb-6">
-            <p id="info-margin-bar" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">De cada real vendido no período, quanto foi custo do produto e quanto sobrou de lucro pra você.</p>
-            <div id="bi-margin-bar"></div>
-        </div>
+    <!-- ✅ NOVO: Resumo Executivo — em texto, pra qualquer pessoa entender
+         o cenário sem precisar interpretar gráfico nenhum -->
+    <div id="bi-executive-summary" class="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-5 mb-8 text-sm text-blue-100 leading-relaxed">
+        Carregando resumo...
     </div>
 
+    <!-- ✅ NOVO: DRE Simplificado — mesmo relatório que um contador monta -->
+    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-black text-slate-300">🧾 Demonstrativo de Resultado (DRE Simplificado)</h3>
+            <button onclick="window.APP.bi.toggleInfo('info-dre')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
+        </div>
+        <p id="info-dre" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">É o mesmo relatório que um contador monta pra mostrar se o negócio deu lucro ou prejuízo no período: quanto entrou, quanto custou o que foi vendido, e o que sobrou de verdade.</p>
+        <div id="bi-dre" class="space-y-1"></div>
+    </div>
+
+    <!-- ✅ NOVO: cada card agora tem comparação com o período anterior
+         (▲/▼) e um botão "ⓘ" que explica a métrica pra quem não conhece -->
     <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         <div class="bg-slate-900/50 p-6 rounded-[20px] border border-white/5">
             <div class="flex items-center justify-between mb-2">
@@ -287,80 +282,59 @@
         </div>
     </div>
 
-    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
-        <div onclick="window.APP.bi.toggleSection('abc')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
+    <!-- ✅ NOVO: Curva ABC — quais produtos realmente sustentam o negócio -->
+    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
+        <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-black text-slate-300">🎯 Curva ABC de Produtos</h3>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-abc')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-                <i data-lucide="chevron-down" id="sec-abc-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
-            </div>
+            <button onclick="window.APP.bi.toggleInfo('info-abc')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
         </div>
-        <div id="sec-abc-content" class="hidden px-6 pb-6">
-            <p id="info-abc" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">
-                Classifica os produtos pelo quanto cada um contribui pro faturamento. <strong class="text-white">Classe A</strong> = poucos produtos que sustentam a maior parte da receita (nunca deixe faltar estoque deles). <strong class="text-white">Classe B</strong> = contribuição intermediária. <strong class="text-white">Classe C</strong> = contribuem pouco — avalie se vale continuar tendo em estoque.
-            </p>
-            <div id="bi-abc-table" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
-            </div>
+        <p id="info-abc" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">
+            Classifica os produtos pelo quanto cada um contribui pro faturamento. <strong class="text-white">Classe A</strong> = poucos produtos que sustentam a maior parte da receita (nunca deixe faltar estoque deles). <strong class="text-white">Classe B</strong> = contribuição intermediária. <strong class="text-white">Classe C</strong> = contribuem pouco — avalie se vale continuar tendo em estoque.
+        </p>
+        <div id="bi-abc-table" class="space-y-2">
+            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
         </div>
     </div>
 
-    <div id="bi-vendor-ranking-wrapper" class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8 hidden">
-        <div onclick="window.APP.bi.toggleSection('ranking')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
+    <!-- ✅ NOVO: Ranking de Vendedores — só aparece pro Admin Supremo -->
+    <div id="bi-vendor-ranking-wrapper" class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8 hidden">
+        <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-black text-slate-300">🏆 Ranking de Vendedores</h3>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-ranking')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-                <i data-lucide="chevron-down" id="sec-ranking-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
-            </div>
+            <button onclick="window.APP.bi.toggleInfo('info-ranking')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
         </div>
-        <div id="sec-ranking-content" class="hidden px-6 pb-6">
-            <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
-            <div id="bi-vendor-ranking" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
-            </div>
+        <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
+        <div id="bi-vendor-ranking" class="space-y-2">
+            <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
         </div>
     </div>
 
-    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
-        <div onclick="window.APP.bi.toggleSection('stock')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
+    <!-- ✅ NOVO: Estoque Crítico — igual um almoxarifado de verdade -->
+    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
+        <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-black text-red-400">⚠️ Estoque Crítico</h3>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-stock')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-                <i data-lucide="chevron-down" id="sec-stock-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
-            </div>
+            <button onclick="window.APP.bi.toggleInfo('info-stock')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
         </div>
-        <div id="sec-stock-content" class="hidden px-6 pb-6">
-            <p id="info-stock" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Produtos com estoque igual ou abaixo do mínimo configurado no cadastro — hora de repor antes que acabe e você perca vendas.</p>
-            <div id="bi-low-stock-list" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Carregando...</div>
-            </div>
+        <p id="info-stock" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Produtos com estoque igual ou abaixo do mínimo configurado no cadastro — hora de repor antes que acabe e você perca vendas.</p>
+        <div id="bi-low-stock-list" class="space-y-2">
+            <div class="text-slate-600 text-center py-6">Carregando...</div>
         </div>
     </div>
 
-    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-8">
-        <div onclick="window.APP.bi.toggleSection('turnover')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
+    <!-- ✅ NOVO: Giro de Estoque / Dias de Cobertura -->
+    <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
+        <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-black text-slate-300">📦 Giro de Estoque — Dias de Cobertura</h3>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <button onclick="event.stopPropagation(); window.APP.bi.toggleInfo('info-turnover')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
-                <i data-lucide="chevron-down" id="sec-turnover-chevron" class="w-5 h-5 text-slate-500 transition-transform"></i>
-            </div>
+            <button onclick="window.APP.bi.toggleInfo('info-turnover')" class="text-slate-600 hover:text-slate-400" title="O que é isso?">ⓘ</button>
         </div>
-        <div id="sec-turnover-content" class="hidden px-6 pb-6">
-            <p id="info-turnover" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Com base no ritmo de vendas do período selecionado, mostra quantos dias o estoque atual de cada produto ainda vai durar. Poucos dias restantes = repor com urgência. Produtos sem nenhuma venda aparecem como "estoque parado" — candidatos a promoção ou liquidação.</p>
-            <div id="bi-stock-turnover" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Carregando...</div>
-            </div>
+        <p id="info-turnover" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Com base no ritmo de vendas do período selecionado, mostra quantos dias o estoque atual de cada produto ainda vai durar. Poucos dias restantes = repor com urgência. Produtos sem nenhuma venda aparecem como "estoque parado" — candidatos a promoção ou liquidação.</p>
+        <div id="bi-stock-turnover" class="space-y-2">
+            <div class="text-slate-600 text-center py-6">Carregando...</div>
         </div>
     </div>
 
-    <div class="bg-slate-900/50 rounded-2xl border border-white/5 mb-6">
-        <div onclick="window.APP.bi.toggleSection('orders')" class="w-full flex items-center justify-between p-6 cursor-pointer select-none">
-            <h3 class="text-lg font-black text-slate-300">📋 Detalhamento de Pedidos</h3>
-            <i data-lucide="chevron-down" id="sec-orders-chevron" class="w-5 h-5 text-slate-500 transition-transform flex-shrink-0"></i>
-        </div>
-        <div id="sec-orders-content" class="hidden px-6 pb-6">
-            <div id="bi-orders-detail" class="space-y-3"></div>
-        </div>
+    <div class="mb-6">
+        <h3 class="text-lg font-black text-slate-300 mb-4">📋 Detalhamento</h3>
+        <div id="bi-orders-detail" class="space-y-3"></div>
     </div>
 </section>
 
@@ -368,6 +342,7 @@
         <section id="tenants-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-purple-500">🏪 GERENCIAR VENDEDORES</h2>
 
+            <!-- ===== ADMINISTRADORES SUPREMOS ===== -->
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-8">
                 <div class="flex justify-between items-center mb-4 gap-3 flex-wrap">
                     <h3 class="text-lg font-black text-red-400">👑 Administradores Supremos</h3>
@@ -485,8 +460,9 @@
                 </div>
             </div>
 
+            <!-- Solicitações pendentes dos vendedores (só Admin Supremo) -->
             <div id="ads-admin-requests-wrapper" class="mt-10 hidden">
-                <h3 class="text-lg font-black text-orange-400 mb-4">📋 Solicitações de Vendedores</h3>
+                <h3 class="text-lg font-black text-orange-400 mb-4">📋 Solicitações Pendentes de Vendedores</h3>
                 <div id="ads-admin-requests-list" class="space-y-3">
                     <div class="text-slate-600 text-center py-8">Carregando...</div>
                 </div>
@@ -504,6 +480,7 @@
         <section id="vendor-settings-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-cyan-500">⚙️ STATUS DA LOJA</h2>
 
+            <!-- ✅ NOVO: Fechamento de Emergência — só aparece pro Admin Supremo -->
             <div id="global-store-override-section" class="bg-slate-900/50 p-6 rounded-2xl border border-red-500/30 mb-6 hidden">
                 <h3 class="text-lg font-black text-red-400 mb-2">🚨 Fechar a Loja Inteira</h3>
                 <p class="text-xs text-slate-500 mb-4 leading-relaxed">
@@ -675,6 +652,7 @@
                     <input id="signup-phone" type="tel" placeholder="Telefone" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <input id="signup-password" type="password" placeholder="Senha (mín 6 caracteres)" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">CADASTRAR</button>
+                    <!-- ✅ NOVO: consentimento explícito + link pra Política de Privacidade -->
                     <p class="text-[11px] text-slate-500 text-center leading-relaxed">
                         Ao se cadastrar, você concorda com nossa
                         <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade e Termos de Uso</a>.
@@ -720,6 +698,7 @@
                 </div>
             </div>
 
+            <!-- ✅ NOVO: só aparece pra quem ainda é 'Cliente' -->
             <button id="profile-become-seller-btn" onclick="window.APP.auth.becomeSeller()" class="hidden w-full bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-2xl transition-all mb-2 flex items-center justify-center gap-2">
                 🚀 QUERO VENDER
             </button>
@@ -752,19 +731,6 @@
             <h3 class="text-2xl font-black mb-6">NOVO PRODUTO</h3>
             <form data-form="product" class="space-y-4">
                 <input id="p-name" type="text" placeholder="Nome do Produto" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
-                <select id="p-category" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white" required>
-                    <option value="">Selecione a Categoria</option>
-                    <option value="Alimentos">🍎 Alimentos</option>
-                    <option value="Bebidas">🥤 Bebidas</option>
-                    <option value="Roupas e Acessórios">👕 Roupas e Acessórios</option>
-                    <option value="Eletrônicos">📱 Eletrônicos</option>
-                    <option value="Casa e Decoração">🏠 Casa e Decoração</option>
-                    <option value="Beleza e Higiene">🧴 Beleza e Higiene</option>
-                    <option value="Brinquedos">🧸 Brinquedos</option>
-                    <option value="Livros e Papelaria">📚 Livros e Papelaria</option>
-                    <option value="Serviços">🛠️ Serviços</option>
-                    <option value="Outros">📦 Outros</option>
-                </select>
                 <input id="p-price" type="number" step="0.01" placeholder="Preço de Venda" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                 <input id="p-cost" type="number" step="0.01" placeholder="Custo" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
                 <input id="p-stock" type="number" placeholder="Estoque" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
@@ -811,23 +777,20 @@
     <script src="config.js?v=3"></script>
     <script src="storage.js?v=2"></script>
     <script src="wrapper.js?v=1"></script>
-    <script src="auth.js?v=6"></script>
+    <script src="auth.js?v=4"></script>
     <script src="store-status.js?v=2"></script>
-    <script src="cart.js?v=2"></script>
-    <script src="products.js?v=7"></script>
-    <script src="ads.js?v=6"></script>
-    <script src="bi.js?v=9"></script>
-    <script src="navigation.js?v=3"></script>
-    <script src="tenants.js?v=6"></script>
+    <script src="cart.js?v=1"></script>
+    <script src="products.js?v=3"></script>
+    <script src="ads.js?v=4"></script>
+    <script src="bi.js?v=5"></script>
+    <script src="navigation.js?v=2"></script>
+    <script src="tenants.js?v=4"></script>
     <script src="orders.js?v=5"></script>
     <script src="order-management.js?v=2"></script>
     <script src="admin-warnings.js?v=2"></script>
-    <script src="vendor-settings.js?v=4"></script>
+    <script src="vendor-settings.js?v=3"></script>
     <script src="notifications.js?v=1"></script>
-    <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
-         "pwa-install.js" que estava aqui não bate com nenhum arquivo,
-         o que causaria um 404 silencioso. -->
-    <script src="pwa.js?v=2"></script>
+    <script src="pwa-install.js?v=2"></script>
     <script src="app.js?v=3"></script>
 
     <!-- Preview em tempo real do anúncio texto -->
@@ -844,6 +807,7 @@
                 }
             });
 
+            // Sincronizar contador do carrinho no bottom nav
             function patchCart() {
                 if (!window.APP || !window.APP.cart) { setTimeout(patchCart, 200); return; }
                 const orig = window.APP.cart.updateUI.bind(window.APP.cart);
