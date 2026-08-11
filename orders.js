@@ -44,11 +44,22 @@ const Orders = {
     },
 
     // ✅ Versão Direct — chamada pelo botão onclick sem form
+    // ✅ v5.0 FIX CRÍTICO: antes, este método fazia a criação do pedido
+    // "na mão" — inserir em orders, depois em order_items, depois dar
+    // update no estoque, tudo em chamadas separadas direto do navegador.
+    // Isso SÓ funcionava se o banco tivesse uma política de RLS
+    // liberando INSERT anônimo em orders/order_items — e uma auditoria
+    // no banco (Supabase) mostrou que essa política NUNCA existiu. Ou
+    // seja, checkout estava fadado a falhar (bloqueado pela segurança
+    // do próprio banco) para qualquer cliente, sempre.
+    // A função `create_order()` já existia pronta no banco (RPC
+    // SECURITY DEFINER: valida loja aberta, vendedor online, estoque, e
+    // calcula o preço a partir do produto real — não confia no preço
+    // que vem do carrinho) mas nunca era chamada por aqui. Agora é.
     async sendOrderDirect() {
         const customerName = document.getElementById('cust-name')?.value?.trim();
         const customerPhone = document.getElementById('cust-phone')?.value?.trim();
         const paymentMethod = document.getElementById('cust-payment')?.value;
-        const totalAmount = window.APP.cart.getTotal();
         const items = [...window.APP.cart.items];
 
         const btn = document.getElementById('btn-finish');
@@ -74,86 +85,32 @@ const Orders = {
 
             log('🚀 Iniciando processamento do pedido...', 'info');
 
-            // CRIAR PEDIDO
-            const { data: orderData, error: orderError } = await _supabase
-                .from('orders')
-                .insert([{
-                    customer_name: customerName,
-                    customer_phone: customerPhone,
-                    payment_method: paymentMethod,
-                    total_amount: totalAmount,
-                    status: 'pending'
-                }])
-                .select();
+            // Agrupa quantidades por produto (cada unidade adicionada ao
+            // carrinho vira uma entrada própria em Cart.items).
+            const qtyMap = {};
+            items.forEach(item => { qtyMap[item.id] = (qtyMap[item.id] || 0) + 1; });
 
-            if (orderError) throw orderError;
-            if (!orderData || orderData.length === 0) throw new Error('Erro ao criar pedido');
-
-            const orderId = orderData[0].id;
-            log('✅ Pedido criado: ' + orderId, 'success');
-
-            // CRIAR ITENS DO PEDIDO
-            // Buscar cost_price real de cada produto para calcular lucro correto no BI
-            // ✅ v4.1: também busca owner_id + telefone do vendedor (profiles.phone),
-            // pra poder oferecer contato direto no comprovante.
-            const productIds = [...new Set(items.map(i => i.id))];
-            const { data: productCosts } = await _supabase
-                .from('products')
-                .select('id, cost_price, stock, owner_id, profiles!owner_id(full_name, phone)')
-                .in('id', productIds);
-
-            const costMap = {};
-            const vendorMap = {}; // ✅ NOVO: productId -> { name, phone }
-            (productCosts || []).forEach(p => {
-                costMap[p.id] = p.cost_price || 0;
-                vendorMap[p.id] = {
-                    name: p.profiles?.full_name || null,
-                    phone: p.profiles?.phone || null
-                };
-            });
-
-            const orderItems = items.map(item => ({
-                order_id: orderId,
-                product_id: item.id,
-                quantity: 1,
-                unit_price: item.price,
-                unit_cost: costMap[item.id] || 0
+            const p_items = Object.entries(qtyMap).map(([product_id, quantity]) => ({
+                product_id, quantity
             }));
 
-            const { error: itemsError } = await _supabase
-                .from('order_items')
-                .insert(orderItems);
-
-            if (itemsError) throw itemsError;
-
-            log('✅ Itens do pedido criados', 'success');
-
-            // DECREMENTAR ESTOQUE de cada produto vendido
-            const stockUpdates = [];
-            const stockMap = {};
-            (productCosts || []).forEach(p => { stockMap[p.id] = p.stock || 0; });
-
-            // Contar quantidades por produto (caso haja duplicatas no carrinho)
-            const qtdMap = {};
-            items.forEach(item => {
-                qtdMap[item.id] = (qtdMap[item.id] || 0) + 1;
+            const { data: result, error: rpcError } = await _supabase.rpc('create_order', {
+                p_customer_name: customerName,
+                p_customer_phone: customerPhone,
+                p_payment_method: paymentMethod,
+                p_items: p_items
             });
 
-            for (const [productId, qty] of Object.entries(qtdMap)) {
-                const currentStock = stockMap[productId] || 0;
-                const newStock = Math.max(0, currentStock - qty);
-                stockUpdates.push(
-                    _supabase
-                        .from('products')
-                        .update({ stock: newStock })
-                        .eq('id', productId)
-                );
-            }
+            if (rpcError) throw rpcError;
 
-            await Promise.all(stockUpdates);
-            log('✅ Estoque atualizado', 'success');
+            const orderId = result.order_id;
+            const totalAmount = result.total_amount;
+            log('✅ Pedido criado: ' + orderId, 'success');
 
-            // Recarregar produtos para refletir novo estoque
+            // Recarregar produtos para refletir o novo estoque (a baixa já
+            // foi feita dentro da própria função, com trava de linha —
+            // sem risco de duas compras simultâneas venderem o mesmo
+            // último item).
             if (window.APP?.products?.fetchAll) {
                 setTimeout(() => window.APP.products.fetchAll(), 500);
             }
@@ -161,14 +118,15 @@ const Orders = {
             window.APP.cart.clear();
             this.closeCustomerModal();
 
-            // ✅ NOVO (v4.1): enriquece cada item com o link do WhatsApp do
-            // vendedor daquele produto específico, pro comprovante mostrar
-            // o ícone de contato ao lado do item (sem inflar a tela).
-            const itemsWithVendor = items.map(item => {
-                const vendor = vendorMap[item.id] || {};
-                const waLink = window.buildWhatsAppLink ? window.buildWhatsAppLink(vendor.phone) : null;
-                return { ...item, vendor_name: vendor.name, vendor_wa_link: waLink };
-            });
+            // A própria função já devolve nome/telefone do vendedor de
+            // cada item — só falta montar o link do WhatsApp.
+            const itemsWithVendor = (result.items || []).map(i => ({
+                name: i.name,
+                price: i.price,
+                quantity: i.quantity,
+                vendor_name: i.vendor_name,
+                vendor_wa_link: window.buildWhatsAppLink ? window.buildWhatsAppLink(i.vendor_phone) : null
+            }));
 
             await this.showReceipt({
                 order_id: orderId,
@@ -183,14 +141,17 @@ const Orders = {
         } catch (err) {
             log(`❌ Erro no checkout: ${err.message}`, 'error');
 
-            // ✅ v4.1: mensagem amigável quando o banco bloqueia a compra
-            // (loja fechada por Sabbath/horário noturno, ou vendedor offline)
-            const isBlockedByHours = err.code === '42501' || /row-level security/i.test(err.message || '');
-            if (isBlockedByHours) {
-                alert('🔒 Não foi possível concluir a compra agora.\n\nA loja está fechada no momento (horário de funcionamento, Sabbath, ou o vendedor de um dos itens está temporariamente offline). Tente novamente mais tarde.');
-            } else {
-                alert(`❌ Erro na compra:\n${err.message}\n\nTente novamente`);
-            }
+            // ✅ create_order() sinaliza problemas de negócio com mensagens
+            // específicas (RAISE EXCEPTION) — traduz pra algo amigável.
+            const friendlyMessages = {
+                store_closed: '🔒 A loja está fechada no momento (horário de funcionamento, Sabbath, ou fechamento manual). Tente novamente mais tarde.',
+                empty_cart: '❌ Seu carrinho está vazio.',
+                product_not_found: '❌ Um dos produtos do carrinho não está mais disponível. Atualize a página e tente de novo.',
+                vendor_banned: '❌ Um dos vendedores deste pedido está indisponível no momento.',
+                vendor_offline: '🔌 Um dos vendedores deste pedido está temporariamente offline. Tente novamente mais tarde.'
+            };
+            const msgKey = Object.keys(friendlyMessages).find(k => (err.message || '').includes(k));
+            alert(msgKey ? friendlyMessages[msgKey] : `❌ Erro na compra:\n${err.message}\n\nTente novamente`);
         } finally {
             if (btn) {
                 btn.disabled = false;
@@ -223,7 +184,15 @@ const Orders = {
      * confirma o pagamento sozinho — só o Admin Supremo pode confirmar,
      * depois de conferir o comprovante (o banco garante isso via trigger).
      */
-    async uploadPaymentProof(orderId, inputEl) {
+    /**
+     * ✅ v5.0 FIX: antes fazia um `.from('orders').update(...)` direto —
+     * a única política de UPDATE em orders é "só Admin Supremo", então
+     * isso sempre falhava pra qualquer cliente anônimo tentando anexar
+     * o comprovante (o botão dava erro de permissão sempre). Agora usa
+     * a função `attach_payment_proof()` (RPC, ignora RLS de propósito) —
+     * que também confere o telefone do pedido antes de aceitar.
+     */
+    async uploadPaymentProof(orderId, inputEl, customerPhone) {
         const file = inputEl?.files?.[0];
         if (!file) return;
 
@@ -256,12 +225,13 @@ const Orders = {
                 .from('payment-proofs')
                 .getPublicUrl(fileName);
 
-            const { error: updateError } = await _supabase
-                .from('orders')
-                .update({ payment_proof_url: publicUrl.publicUrl })
-                .eq('id', orderId);
+            const { error: attachError } = await _supabase.rpc('attach_payment_proof', {
+                p_order_id: orderId,
+                p_proof_path: publicUrl.publicUrl,
+                p_customer_phone: customerPhone
+            });
 
-            if (updateError) throw updateError;
+            if (attachError) throw attachError;
 
             setStatus('✅ Comprovante enviado! Aguarde a confirmação.', 'text-green-400');
             if (zoneEl) zoneEl.classList.add('hidden');
@@ -274,6 +244,15 @@ const Orders = {
     },
 
     async showReceipt(orderData) {
+        // ✅ FIX SEGURANÇA: o comprovante roda no navegador do PRÓPRIO
+        // COMPRADOR — se o nome do produto (definido pelo vendedor) ou os
+        // dados do cliente fossem inseridos sem escapeHtml(), um vendedor
+        // mal-intencionado conseguiria rodar código no navegador de quem
+        // compra dele. Escapando aqui.
+        const esc = window.escapeHtml || ((s) => s);
+        const safeCustomerName = esc(orderData.customer_name);
+        const safeCustomerPhone = esc(orderData.customer_phone);
+
         const receiptHTML = `
             <div class="fixed inset-0 z-[5000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
                 <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-slate-800 max-h-[90vh] overflow-y-auto">
@@ -294,11 +273,11 @@ const Orders = {
                         <div class="space-y-2 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-slate-400">Cliente:</span>
-                                <span class="text-white font-bold">${orderData.customer_name}</span>
+                                <span class="text-white font-bold">${safeCustomerName}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-400">Telefone:</span>
-                                <span class="text-white font-bold">${orderData.customer_phone}</span>
+                                <span class="text-white font-bold">${safeCustomerPhone}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-400">Data/Hora:</span>
@@ -312,11 +291,11 @@ const Orders = {
                         <div class="space-y-2 max-h-40 overflow-y-auto">
                             ${orderData.items.map(item => `
                                 <div class="text-xs bg-white/5 p-2 rounded-lg flex justify-between items-center gap-2">
-                                    <span class="text-slate-300 truncate">${item.name}</span>
+                                    <span class="text-slate-300 truncate">${esc(item.name)}</span>
                                     <div class="flex items-center gap-2 flex-shrink-0">
                                         ${item.vendor_wa_link ? `
                                             <a href="${item.vendor_wa_link}" target="_blank" rel="noopener"
-                                               title="Falar com ${item.vendor_name || 'o vendedor'} no WhatsApp"
+                                               title="Falar com ${esc(item.vendor_name || 'o vendedor')} no WhatsApp"
                                                class="text-green-500 hover:text-green-400">
                                                 <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
                                             </a>
@@ -357,7 +336,7 @@ const Orders = {
                                         <input type="file" id="proof-input-${orderData.order_id}"
                                                accept="image/jpeg,image/png,image/webp,application/pdf"
                                                class="hidden"
-                                               onchange="window.APP.orders.uploadPaymentProof('${orderData.order_id}', this)">
+                                               onchange="window.APP.orders.uploadPaymentProof('${orderData.order_id}', this, '${esc(orderData.customer_phone).replace(/'/g, "\\'")}')">
                                         <div class="text-2xl mb-1">📎</div>
                                         <div class="text-xs font-bold text-slate-300">Toque para anexar o comprovante</div>
                                         <div class="text-[10px] text-slate-500 mt-1">JPG, PNG ou PDF · máx. 5MB</div>

@@ -157,6 +157,7 @@ const BI = {
                 total_amount,
                 status,
                 created_at,
+                expires_at,
                 payment_method,
                 payment_proof_url,
                 payment_confirmed,
@@ -189,7 +190,7 @@ const BI = {
                 unit_price,
                 unit_cost,
                 products!product_id!inner (name, owner_id),
-                orders!order_id (id, customer_name, customer_phone, created_at, payment_method, payment_proof_url, payment_confirmed)
+                orders!order_id (id, customer_name, customer_phone, created_at, payment_method, payment_proof_url, payment_confirmed, status, expires_at)
             `)
             .eq('products.owner_id', sellerId);
 
@@ -207,6 +208,13 @@ const BI = {
                     payment_method: item.orders?.payment_method || null,
                     payment_proof_url: item.orders?.payment_proof_url || null,
                     payment_confirmed: !!item.orders?.payment_confirmed,
+                    // ✅ FIX: faltavam esses dois campos — sem eles, o
+                    // vendedor (diferente do Admin Supremo) nunca via o
+                    // selo "⌛ Expirou" nem a contagem "⏳ Expira em Xmin",
+                    // e pedidos expirados continuavam contando errado no
+                    // faturamento/lucro do próprio painel do vendedor.
+                    status: item.orders?.status || 'pending',
+                    expires_at: item.orders?.expires_at || null,
                     total_amount: 0,
                     order_items: []
                 };
@@ -255,19 +263,28 @@ const BI = {
             return d >= prevRange.start && d <= prevRange.end;
         });
 
+        // ✅ NOVO: pedidos pendentes sem pagamento expiram sozinhos depois
+        // de 2h (devolvem o estoque) — não é uma venda de verdade, então
+        // não deve contar em faturamento/lucro/ranking/gráficos. Ainda
+        // assim continuam aparecendo no Detalhamento de Pedidos (com selo
+        // "⌛ Expirou"), pra o vendedor entender que quase vendeu.
+        const semExpirados = arr => arr.filter(o => o.status !== 'expired');
+        const filteredParaKpi = semExpirados(filtered);
+        const prevFilteredParaKpi = semExpirados(prevFiltered);
+
         // ✅ v9.4: monta o mapa de custo UMA VEZ aqui, e passa pronto
         // pra quem precisar — em vez de cada função reconstruir sozinha.
         const costFallback = this._buildCostFallbackMap();
 
         this._syncPeriodButtonsUI(range);
-        this.renderKPIs(filtered, prevFiltered, costFallback);
-        this.renderMarginBar(filtered, costFallback);
+        this.renderKPIs(filteredParaKpi, prevFilteredParaKpi, costFallback);
+        this.renderMarginBar(filteredParaKpi, costFallback);
         this.renderOrderList(filtered);
-        this.renderABC(filtered);
+        this.renderABC(filteredParaKpi);
         this.renderCriticalStock();
-        this.renderStockTurnover(filtered, range);
-        this.renderVendorRanking(filtered);
-        await this.prepareCharts(filtered, token, range, costFallback);
+        this.renderStockTurnover(filteredParaKpi, range);
+        this.renderVendorRanking(filteredParaKpi);
+        await this.prepareCharts(filteredParaKpi, token, range, costFallback);
     },
 
     _getPeriodRange(period) {
@@ -332,7 +349,13 @@ const BI = {
 
     _buildCostFallbackMap() {
         const map = {};
-        const cached = window.APP?.products?.products || [];
+        // ✅ FIX v5.0: window.APP.products.products agora é só a "página
+        // atual" da vitrine pública (paginada, pra aguentar catálogo
+        // grande) — pra ter o custo de TODOS os produtos (inclusive os
+        // que não estão na página carregada agora), usa manageProducts,
+        // que é sempre completo (todos os produtos, pro Admin Supremo;
+        // só os próprios, pro vendedor — e o BI já é escopado por role).
+        const cached = window.APP?.products?.manageProducts || [];
         cached.forEach(p => { map[p.id] = p.cost_price || 0; });
         return map;
     },
@@ -491,11 +514,19 @@ const BI = {
             const canDelete = this._viewRole === 'supreme';
             const canConfirmPayment = this._viewRole === 'supreme';
 
+            // ✅ FIX SEGURANÇA: nome/telefone do cliente vêm do checkout,
+            // que qualquer pessoa preenche SEM precisar de conta — e o
+            // nome do produto vem do cadastro do vendedor. Nenhum dos
+            // dois passava por escapeHtml() antes de virar innerHTML aqui.
+            const esc = window.escapeHtml || ((s) => s);
+
             list.innerHTML = orders.slice(0, 15).map(order => {
                 const itemsText = (order.order_items || [])
-                    .map(i => `${i.quantity || 1}x ${i.products?.name || 'Produto removido'}`)
+                    .map(i => `${i.quantity || 1}x ${esc(i.products?.name || 'Produto removido')}`)
                     .join(', ') || 'Sem itens registrados';
 
+                const customerName = esc(order.customer_name || 'Cliente');
+                const customerPhone = esc(order.customer_phone || '');
                 const waLink = this._buildWhatsAppLink(order.customer_phone);
                 const dataHora = new Date(order.created_at).toLocaleString('pt-BR', {
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -505,11 +536,36 @@ const BI = {
                 const paymentBadge = order.payment_method ? `
                     <span class="text-[10px] font-black px-2 py-1 rounded-full bg-white/10 text-slate-300 uppercase">${order.payment_method}</span>
                 ` : '';
+                // ✅ NOVO: pedido expirado (2h sem comprovante, estoque já
+                // devolvido sozinho) ganha selo próprio — não fica mais
+                // com a cara de "Aguardando pagamento" pra sempre.
                 const statusBadge = isPaid ? `
                     <span class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago</span>
+                ` : order.status === 'expired' ? `
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-slate-600/30 text-slate-400 uppercase">⌛ Expirou (estoque devolvido)</span>
                 ` : `
                     <span class="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Aguardando pagamento</span>
                 `;
+                // ✅ NOVO: enquanto o pedido ainda está pendente (sem
+                // comprovante nem confirmação), mostra quanto tempo falta
+                // pra ele expirar sozinho e devolver o estoque — assim, se
+                // o vendedor checar o painel, ele vê a urgência na hora
+                // (mesmo que tenha perdido o toast em tempo real por estar
+                // com o telefone no silencioso).
+                let expiryChip = '';
+                if (!isPaid && order.status === 'pending' && !order.payment_proof_url && order.expires_at) {
+                    const diffMs = new Date(order.expires_at).getTime() - Date.now();
+                    if (diffMs > 0) {
+                        const mins = Math.round(diffMs / 60000);
+                        const label = mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 ? ' ' + (mins % 60) + 'min' : ''}` : `${mins}min`;
+                        const urgente = mins <= 30;
+                        expiryChip = `
+                            <span class="text-[10px] font-black px-2 py-1 rounded-full ${urgente ? 'bg-red-600/20 text-red-400' : 'bg-orange-600/20 text-orange-400'} uppercase">
+                                ⏳ Expira em ${label}
+                            </span>
+                        `;
+                    }
+                }
                 const proofLink = order.payment_proof_url ? `
                     <a href="${order.payment_proof_url}" target="_blank" rel="noopener" class="text-[10px] font-black px-2 py-1 rounded-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 uppercase transition-all">
                         📎 Ver Comprovante
@@ -525,16 +581,16 @@ const BI = {
                     <div class="flex justify-between items-start bg-white/5 p-4 rounded-xl border border-white/5">
                         <div class="flex-1 min-w-0 pr-3">
                             <div class="font-bold text-white">Pedido #${order.id.substring(0, 8).toUpperCase()}</div>
-                            <div class="text-xs text-slate-400 mt-1">${order.customer_name || 'Cliente'}</div>
+                            <div class="text-xs text-slate-400 mt-1">${customerName}</div>
                             ${order.customer_phone ? `
                                 <div class="text-xs text-slate-500 mt-1">
-                                    📱 ${order.customer_phone}
+                                    📱 ${customerPhone}
                                     ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="text-green-500 hover:text-green-400 font-bold ml-2">WhatsApp</a>` : ''}
                                 </div>
                             ` : ''}
                             <div class="text-[11px] text-blue-300/80 mt-2 leading-relaxed break-words">${itemsText}</div>
                             <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                                ${paymentBadge}${statusBadge}${proofLink}${confirmBtn}
+                                ${paymentBadge}${statusBadge}${expiryChip}${proofLink}${confirmBtn}
                             </div>
                             <div class="text-[10px] text-slate-600 mt-1">${dataHora}</div>
                         </div>
@@ -616,7 +672,9 @@ const BI = {
         const container = document.getElementById('bi-low-stock-list');
         if (!container) return;
 
-        let products = window.APP?.products?.products || [];
+        // ✅ FIX v5.0: usa manageProducts (lista completa), não a página
+        // paginada da vitrine pública — ver nota em _buildCostFallbackMap.
+        let products = window.APP?.products?.manageProducts || [];
         if (this._viewRole === 'seller') {
             products = products.filter(p => p.owner_id === window.APP.auth.userId);
         }
@@ -653,7 +711,8 @@ const BI = {
         const container = document.getElementById('bi-stock-turnover');
         if (!container) return;
 
-        let products = window.APP?.products?.products || [];
+        // ✅ FIX v5.0: idem — lista completa, não a página paginada.
+        let products = window.APP?.products?.manageProducts || [];
         if (this._viewRole === 'seller') {
             products = products.filter(p => p.owner_id === window.APP.auth.userId);
         }
@@ -729,7 +788,8 @@ const BI = {
 
         const costFallback = this._buildCostFallbackMap();
         const productMap = {};
-        (window.APP?.products?.products || []).forEach(p => { productMap[p.id] = p; });
+        // ✅ FIX v5.0: idem — lista completa, não a página paginada.
+        (window.APP?.products?.manageProducts || []).forEach(p => { productMap[p.id] = p; });
 
         const byVendor = {};
         orders.forEach(o => {
@@ -1073,10 +1133,14 @@ const BI = {
         el.innerHTML = labels.map((name, i) => {
             const value = data[i];
             const pct = totalUnidades > 0 ? ((value / totalUnidades) * 100).toFixed(0) : 0;
+            // ✅ FIX SEGURANÇA: antes só escapava aspas (pro atributo title),
+            // deixando `<`/`>` livres no texto visível da legenda — agora
+            // usa escapeHtml() completo em ambos os lugares.
+            const safeName = window.escapeHtml ? window.escapeHtml(name) : name;
             return `
                 <div class="legend-item">
                     <span class="legend-dot" style="background:${colors[i]}"></span>
-                    <span class="legend-name" title="${name.replace(/"/g, '&quot;')}">${name}</span>
+                    <span class="legend-name" title="${safeName}">${safeName}</span>
                     <span class="legend-value">${value}un · ${pct}%</span>
                 </div>
             `;
@@ -1086,7 +1150,8 @@ const BI = {
     async _resolveProductNames(ids) {
         const nameMap = {};
 
-        const cached = window.APP?.products?.products || [];
+        // ✅ FIX v5.0: idem — lista completa, não a página paginada.
+        const cached = window.APP?.products?.manageProducts || [];
         cached.forEach(p => {
             if (ids.includes(p.id)) nameMap[p.id] = p.name;
         });

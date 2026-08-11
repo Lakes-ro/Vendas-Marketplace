@@ -1312,3 +1312,468 @@ input:checked + .toggle-slider:before {
 @media (prefers-reduced-motion: reduce) {
     .sale-badge { animation: none; }
 }
+
+/* ========================================
+   ✅ REDESIGN v5.0 — IDENTIDADE VISUAL + ENGAJAMENTO
+   Objetivo: tipografia com mais personalidade (Sora nos
+   títulos + Inter no corpo), um segundo acento de cor em
+   gradiente (azul → roxo → âmbar) pra sensação de
+   "comunidade viva", selos de Novidade/Últimas Unidades na
+   vitrine, entrada escalonada dos cards + zoom na imagem no
+   hover, um convite visual pra rolar a tela logo abaixo do
+   banner, e um botão flutuante de voltar ao topo — tudo
+   pensado pra fazer a pessoa continuar rolando a vitrine.
+   ======================================== */
+
+:root {
+    --font-display: 'Sora', 'Inter', -apple-system, sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --accent-warm: #f59e0b;
+    --accent-warm-dark: #d97706;
+    --community-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 55%, #f59e0b 100%);
+}
+
+body { font-family: var(--font-body); }
+
+h1, h2, h3, .font-black, .font-bold {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+/* ----------------------------------------
+   Subtítulo da vitrine (embaixo do "Marketplace")
+   ---------------------------------------- */
+.market-subtitle {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: var(--font-body);
+    letter-spacing: 0;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+}
+
+/* ----------------------------------------
+   Convite visual pra rolar a página
+   ---------------------------------------- */
+.scroll-cue {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 14px 0 24px;
+    animation: scrollCueFloat 1.8s ease-in-out infinite;
+}
+.scroll-cue i,
+.scroll-cue svg { width: 16px; height: 16px; color: var(--accent-warm); flex-shrink: 0; }
+
+@keyframes scrollCueFloat {
+    0%, 100% { transform: translateY(0);  opacity: .6; }
+    50%      { transform: translateY(5px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scroll-cue { animation: none; }
+}
+
+/* ----------------------------------------
+   Selos de produto — Novidade / Últimas Unidades
+   ---------------------------------------- */
+.product-badge-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.product-badge {
+    font-size: 9.5px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.badge-new {
+    background: var(--community-gradient);
+    color: #fff;
+}
+
+.badge-urgent {
+    background: linear-gradient(135deg, var(--accent-warm), #ef4444);
+    color: #fff;
+    animation: urgentPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .badge-urgent { animation: none; }
+}
+
+/* ----------------------------------------
+   Cards da vitrine: entrada escalonada + zoom na imagem
+   (usa a variável --i, definida inline pelo products.js,
+   pra calcular o atraso de cada card na sequência)
+   ---------------------------------------- */
+#product-grid > div {
+    animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 0.06s);
+    overflow: hidden;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+#product-grid img { transition: transform .5s cubic-bezier(0.16, 1, 0.3, 1); }
+#product-grid > div:hover img { transform: scale(1.08); }
+
+@media (prefers-reduced-motion: reduce) {
+    #product-grid > div { animation: none; }
+    #product-grid > div:hover img { transform: none; }
+}
+
+/* ----------------------------------------
+   Banner de anúncio com brilho de borda em gradiente
+   ---------------------------------------- */
+#ads-hero { position: relative; }
+#ads-hero::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--community-gradient);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+/* ----------------------------------------
+   Categoria ativa ganha o gradiente da marca
+   ---------------------------------------- */
+#category-filter-bar button.bg-blue-600 {
+    background: var(--community-gradient) !important;
+    border-color: transparent !important;
+}
+
+/* ----------------------------------------
+   Botão flutuante — Voltar ao topo
+   ---------------------------------------- */
+#back-to-top {
+    position: fixed;
+    right: 20px;
+    bottom: calc(var(--bottom-nav-height) + 20px);
+    z-index: 150;
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 50%;
+    background: var(--community-gradient);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.9);
+    transition: opacity .25s ease, transform .25s ease;
+}
+#back-to-top svg { width: 20px; height: 20px; }
+#back-to-top.show {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(0) scale(1);
+}
+#back-to-top:hover { filter: brightness(1.1); }
+
+@media (min-width: 769px) {
+    #back-to-top { bottom: 24px; }
+}
+
+/* ----------------------------------------
+   Classes que faltavam no tailwind.built.css
+   (pré-compilado antes dessas classes existirem
+   no projeto) — usadas no chip de expiração de
+   pedido pendente, no BI.
+   ---------------------------------------- */
+.bg-orange-600\/20 { background-color: rgba(234, 88, 12, 0.2); }
+.bg-slate-600\/30 { background-color: rgba(71, 85, 105, 0.3); }
+
+/* ----------------------------------------
+   Galeria de mídia do card de produto — rolagem
+   horizontal nativa (toque), com bolinhas de
+   posição. Vídeo usa os controles nativos do
+   navegador (sem autoplay).
+   ---------------------------------------- */
+.product-gallery {
+    position: relative;
+}
+
+.product-gallery-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 1rem;
+    scrollbar-width: none;
+}
+.product-gallery-track::-webkit-scrollbar { display: none; }
+
+.product-gallery-item {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 11rem;
+    object-fit: cover;
+    scroll-snap-align: start;
+    background: #1e293b;
+}
+
+video.product-gallery-item {
+    object-fit: contain;
+    background: #000;
+}
+
+.product-gallery-dots {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    padding: 3px 8px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 999px;
+    backdrop-filter: blur(2px);
+}
+
+.product-gallery-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    transition: all .2s ease;
+}
+
+.product-gallery-dot.active {
+    background: #fff;
+    width: 14px;
+    border-radius: 999px;
+}
+
+/* ----------------------------------------
+   Preview de mídia no formulário de produto
+   (até 5 fotos/vídeos, com botão de remover)
+   ---------------------------------------- */
+.media-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.media-tile {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.media-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-tile-video {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    background: #0f172a;
+}
+
+.media-tile-remove {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.media-tile-remove:hover { background: #ef4444; }
+
+.media-tile-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #64748b;
+    font-size: 11px;
+    padding: 16px 0;
+}
+
+/* ----------------------------------------
+   Selo "X vendidos" — prova social estilo
+   Shopee/AliExpress/SheIn
+   ---------------------------------------- */
+.product-sold-count {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #94a3b8;
+}
+
+/* ----------------------------------------
+   Barra de busca — igual ao topo de qualquer
+   grande marketplace (Shopee/AliExpress/SheIn
+   sempre abrem com busca em destaque)
+   ---------------------------------------- */
+#market-search-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+#market-search-bar .market-search-icon {
+    position: absolute;
+    left: 18px;
+    width: 18px;
+    height: 18px;
+    color: #64748b;
+    pointer-events: none;
+}
+
+#market-search-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 14px 44px;
+    color: #e2e8f0;
+    font-size: 14px;
+    font-family: var(--font-body, inherit);
+    transition: border-color .2s ease, background .2s ease;
+}
+
+#market-search-input::placeholder { color: #64748b; }
+
+#market-search-input:focus {
+    outline: none;
+    border-color: var(--accent-warm, #3b82f6);
+    background: rgba(255,255,255,0.08);
+}
+
+#market-search-clear {
+    position: absolute;
+    right: 14px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#market-search-clear svg { width: 13px; height: 13px; }
+#market-search-clear:hover { background: rgba(255,255,255,0.18); }
+
+/* ----------------------------------------
+   Chips de categoria com ícone — fileira de
+   atalhos visuais, igual Shopee/AliExpress
+   ---------------------------------------- */
+.category-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.05);
+    color: #94a3b8;
+    transition: all .2s ease;
+    white-space: nowrap;
+}
+.category-chip:hover { color: #fff; background: rgba(255,255,255,0.09); }
+.category-chip-icon { font-size: 14px; line-height: 1; }
+
+.category-chip-active {
+    background: var(--community-gradient, #3b82f6) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+}
+
+.category-chip-fav.category-chip-active {
+    background: linear-gradient(135deg, #ef4444, #f59e0b) !important;
+}
+
+.category-chip-count {
+    background: rgba(0,0,0,0.25);
+    border-radius: 999px;
+    padding: 1px 6px;
+    font-size: 10px;
+}
+
+/* ----------------------------------------
+   Botão de favoritar (coração) sobre a imagem
+   do produto — clássico de app de compras
+   ---------------------------------------- */
+.product-fav-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(11,15,26,0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    transition: transform .15s ease, background .2s ease, color .2s ease;
+}
+.product-fav-btn svg { width: 17px; height: 17px; }
+.product-fav-btn:hover { transform: scale(1.1); filter: none; }
+.product-fav-btn:active { transform: scale(0.92); }
+
+.product-fav-btn.is-fav {
+    color: #ef4444;
+    background: rgba(11,15,26,0.75);
+}
+.product-fav-btn.is-fav svg { fill: #ef4444; }

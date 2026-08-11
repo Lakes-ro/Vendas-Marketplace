@@ -55,7 +55,12 @@ const Notifications = {
     _handleNewItem(item) {
         try {
             const myId = window.APP?.auth?.userId;
-            const myProducts = window.APP?.products?.products || [];
+            // ✅ FIX v5.0: manageProducts (lista completa dos PRÓPRIOS
+            // produtos do vendedor), não `products` (que agora é só a
+            // página atual da vitrine pública) — sem isso, uma venda de
+            // um produto que não estivesse na página carregada no
+            // momento passaria batido, sem avisar o vendedor.
+            const myProducts = window.APP?.products?.manageProducts || [];
             const product = myProducts.find(p => p.id === item.product_id);
 
             // Não é produto meu (ou sou supremo vendo tudo — supremo não
@@ -78,11 +83,13 @@ const Notifications = {
         }
 
         const total = (unitPrice || 0) * (qty || 1);
+        // ✅ FIX SEGURANÇA: nome do produto escapado antes do innerHTML.
+        const safeName = window.escapeHtml ? window.escapeHtml(name) : name;
         const toast = document.createElement('div');
         toast.className = 'cart-toast sale-toast';
         toast.innerHTML = `
             <i data-lucide="party-popper" class="cart-toast-icon" style="color:#3b82f6"></i>
-            <span>🎉 Venda! ${qty > 1 ? qty + 'x ' : ''}${name} — R$ ${window.formatBRL(total)}</span>
+            <span>🎉 Venda! ${qty > 1 ? qty + 'x ' : ''}${safeName} — R$ ${window.formatBRL(total)} · confirme em até 2h</span>
         `;
         container.appendChild(toast);
 
