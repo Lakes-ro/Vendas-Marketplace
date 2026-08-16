@@ -1,5 +1,5 @@
 /**
- * ADS.JS v6.3
+ * ADS.JS v6.4
  * ✅ Admin: Gerencia anúncios (criar, editar, deletar)
  * ✅ Admin: vê e aprova/rejeita solicitações de anúncio dos vendedores
  * ✅ Vendedores: Solicita anúncios (status: pending/approved/rejected)
@@ -12,6 +12,10 @@
  *    status='pending'). Aprovadas/Rejeitadas ficam visíveis por 7 dias
  *    depois da decisão, e só então saem das abas (não desaparecem na
  *    hora); Pendentes nunca somem sozinhas.
+ * ✅ v6.4 NOVO — PERFORMANCE: a imagem do banner passa por
+ *    window.compressImage() (config.js) antes do upload — mesmo
+ *    problema de fotos de câmera grandes deixando o cadastro lento,
+ *    agora resolvido também aqui.
  */
 
 const Ads = {
@@ -30,12 +34,12 @@ const Ads = {
 
     async init() {
         try {
-            log('📢 Inicializando Ads v6.3...', 'info');
+            log('📢 Inicializando Ads v6.4...', 'info');
             this.currentRole = this._getRole();
             this.detectPWA();
             this._ensureModal();
             await this.loadAds(); // já cuida de configurar a UI certa pro cargo atual
-            log('✅ Ads v6.3 inicializado', 'success');
+            log('✅ Ads v6.4 inicializado', 'success');
         } catch (err) {
             log(`❌ Erro ao inicializar ads: ${err.message}`, 'error');
         }
@@ -258,7 +262,7 @@ const Ads = {
     },
 
     /**
-     * ✅ NOVO (v6.3): cria (uma única vez) a barra de abas Pendentes /
+     * ✅ v6.3: cria (uma única vez) a barra de abas Pendentes /
      * Aprovadas / Rejeitadas / Todas, logo acima da lista.
      */
     _ensureAdminRequestsTabs() {
@@ -869,11 +873,18 @@ const Ads = {
                         return;
                     }
 
-                    const fileName = `${Date.now()}-${file.name}`;
+                    // ✅ v6.4 PERFORMANCE: comprime a imagem do banner
+                    // antes de subir — mesmo ganho de velocidade que já
+                    // existe pras fotos de produto.
+                    const uploadFile = window.compressImage
+                        ? await window.compressImage(file)
+                        : file;
+
+                    const fileName = `${Date.now()}-${uploadFile.name}`;
 
                     const { error: uploadError } = await _supabase.storage
                         .from('ad-images')
-                        .upload(fileName, file);
+                        .upload(fileName, uploadFile);
 
                     if (uploadError) throw uploadError;
 

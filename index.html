@@ -7,6 +7,15 @@
     <meta name="description" content="Ityrapuã Store - Marketplace comunitário com BI integrado">
     <title>Ityrapuã Store | Marketplace</title>
 
+    <script>
+  (function () {
+    var theme = localStorage.getItem('ityrapuan_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+
+
+
     <!-- ✅ PERFORMANCE + PWA: limpeza de Service Worker fantasma/cache
          antigo agora roda UMA ÚNICA VEZ por aparelho (marcada com uma
          flag no localStorage), não em toda visita como antes. Antes
@@ -42,6 +51,9 @@
                 registrarSW();
             }
         })();
+        
+
+        
     </script>
 
     <!-- PWA -->
@@ -66,15 +78,18 @@
          arquivo que ainda não usa essa classe, ela só aparece depois de
          reconstruir esse arquivo (é só pedir). Suba o "?v=" ao regerar. -->
     <link rel="stylesheet" href="tailwind.built.css?v=3">
+    <link rel="stylesheet" href="theme.css?v=2">
 
-    <!-- CHART.JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- ✅ PERFORMANCE (v5.2): Chart.js deixou de carregar aqui fixo pra
+         TODO visitante — só quem realmente abre a aba BI/Gestão precisa
+         dele (~200KB). bi.js agora injeta esse <script> sozinho, sob
+         demanda, na primeira vez que loadDashboard() roda. -->
 
     <!-- SUPABASE JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- LUCIDE ICONS -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         #ad-form-text textarea { font-family: 'Inter', sans-serif; }
@@ -92,6 +107,11 @@
     </style>
 </head>
 <body class="bg-[#0b0f1a] text-slate-200 flex min-h-screen font-sans overflow-x-hidden">
+
+    <button id="theme-toggle-btn" aria-label="Alternar modo claro/escuro" title="Alternar modo claro/escuro">
+    <i data-lucide="sun" id="theme-toggle-icon-sun" class="hidden"></i>
+    <i data-lucide="moon" id="theme-toggle-icon-moon"></i>
+</button>
 
     <!-- ========================================
          SIDEBAR NAVEGAÇÃO
@@ -638,6 +658,16 @@
             </div>
 
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
+                <h3 class="text-lg font-black text-slate-300 mb-2">🔑 Minha Chave Pix</h3>
+                <p class="text-xs text-slate-500 mb-4 leading-relaxed">É essa chave que aparece pros compradores no checkout, no bloco de pagamento Pix específico da sua loja — cada vendedor recebe direto na própria chave.</p>
+                <input id="vendor-pix-key-input" type="text" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                    class="w-full p-3 mb-3 rounded-lg bg-slate-800 border border-white/10 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none">
+                <button type="button" id="vendor-save-pix-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all">
+                    💾 Salvar Chave Pix
+                </button>
+            </div>
+
+            <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
                 <h3 class="text-lg font-black text-slate-300 mb-4">Horário Automático</h3>
                 <label class="flex items-center gap-3 mb-4 cursor-pointer">
                     <input type="checkbox" id="vendor-auto-schedule-toggle" class="w-5 h-5">
@@ -784,6 +814,7 @@
                     <p class="text-[11px] text-slate-500 text-center leading-relaxed">
                         Ao se cadastrar, você concorda com nossa
                         <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade e Termos de Uso</a>.
+                        Toda conta nova começa como <strong class="text-slate-400">Cliente</strong> — pra vender, use "🚀 QUERO VENDER" no seu perfil depois de entrar.
                     </p>
                 </form>
             </div>
@@ -834,6 +865,92 @@
                 <i data-lucide="log-out" class="w-4 h-4"></i> SAIR DA CONTA
             </button>
             <button class="w-full text-slate-400 hover:text-white font-bold py-2 transition-all" data-action="close-profile-modal">Fechar</button>
+        </div>
+    </div>
+
+    <!-- ========================================
+         TERMOS DE RESPONSABILIDADE DO VENDEDOR (leitura)
+         ======================================== -->
+    <div id="seller-terms-modal" class="hidden fixed inset-0 bg-black/85 flex items-center justify-center z-[160] backdrop-blur-sm p-4">
+        <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-lg border border-white/10 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <h3 class="text-2xl font-black mb-6 text-orange-400">📋 Termos de Responsabilidade do Vendedor</h3>
+            <div class="space-y-4 text-sm text-slate-300 leading-relaxed">
+                <p>
+                    <strong class="text-white">1. Responsabilidade pelos produtos</strong><br>
+                    Você é o único responsável pela veracidade das informações cadastradas (nome, descrição, preço, fotos, estoque) e pela legalidade, qualidade e entrega dos produtos ou serviços que anunciar. A administração não fabrica, revende nem garante produtos de terceiros.
+                </p>
+                <p>
+                    <strong class="text-white">2. Itens proibidos</strong><br>
+                    É proibido anunciar produtos ilegais, falsificados, perigosos, ou que violem direitos de terceiros, leis vigentes ou os princípios da instituição associada ao projeto. A administração pode remover qualquer anúncio e suspender a conta, a qualquer momento, sem aviso prévio, quando identificar violação.
+                </p>
+                <p>
+                    <strong class="text-white">3. Preço, estoque e disponibilidade</strong><br>
+                    Mantenha preços e quantidades em estoque sempre atualizados. Vender sem estoque real disponível, ou alterar o valor combinado depois do pedido confirmado, é considerado prática abusiva e pode gerar advertência.
+                </p>
+                <p>
+                    <strong class="text-white">4. Horário de funcionamento</strong><br>
+                    Seu status (Online/Offline) e o horário automático devem refletir sua disponibilidade real para atender pedidos. Ficar "Online" sem intenção de atender é prática vedada.
+                </p>
+                <p>
+                    <strong class="text-white">5. Pagamentos via Pix</strong><br>
+                    Comprovantes de pagamento são conferidos exclusivamente pelo Admin Supremo. Só libere ou entregue o produto depois que o pagamento aparecer confirmado no sistema.
+                </p>
+                <p>
+                    <strong class="text-white">6. Contato com compradores</strong><br>
+                    Você terá acesso a nome e telefone de quem comprar seus produtos, exclusivamente para viabilizar a venda e a entrega. É proibido usar esses dados para qualquer outra finalidade, conforme a Política de Privacidade e a LGPD.
+                </p>
+                <p>
+                    <strong class="text-white">7. Advertências e penalidades</strong><br>
+                    O descumprimento destes termos pode gerar advertência registrada, suspensão temporária ou banimento definitivo da conta, a critério da administração.
+                </p>
+                <p>
+                    <strong class="text-white">8. Impostos e obrigações legais</strong><br>
+                    Você é o único responsável por quaisquer obrigações fiscais e tributárias relacionadas à venda dos seus produtos ou serviços.
+                </p>
+                <p>
+                    <strong class="text-white">9. Alterações</strong><br>
+                    Estes termos podem ser atualizados conforme o sistema evolui. Ao continuar vendendo depois de uma atualização, você concorda com os novos termos.
+                </p>
+                <p class="text-xs text-slate-500 pt-2 border-t border-white/5">
+                    Veja também a <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade completa</a>.
+                </p>
+            </div>
+            <button onclick="window.APP.auth.closeSellerTermsModal()" class="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-2xl transition-all">Fechar</button>
+        </div>
+    </div>
+
+    <!-- ========================================
+         CONFIRMAÇÃO — VIRAR VENDEDOR (QUERO VENDER)
+         ======================================== -->
+    <div id="become-seller-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[150] backdrop-blur-sm p-4">
+        <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl text-center">
+            <div class="text-5xl mb-3">🚀</div>
+            <h3 class="text-xl font-black text-white mb-2">Virar Vendedor</h3>
+            <p class="text-sm text-slate-400 mb-6 leading-relaxed">
+                Você vai passar a poder cadastrar produtos, gerenciar estoque e ver seu próprio painel de BI.
+                Antes de continuar, leia e aceite os termos abaixo.
+            </p>
+
+            <button type="button" onclick="window.APP.auth.openSellerTermsModal()" class="w-full mb-4 text-blue-400 hover:text-blue-300 underline text-sm font-bold">
+                📋 Ler os Termos de Responsabilidade do Vendedor
+            </button>
+
+            <div class="text-left mb-4">
+                <label class="text-xs font-black text-slate-300 uppercase block mb-2">🔑 Sua Chave Pix</label>
+                <input id="become-seller-pix-key" type="text" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                    class="w-full p-3 rounded-xl bg-slate-800 border border-white/10 text-white text-sm placeholder-slate-500 focus:border-blue-500 focus:outline-none">
+                <p class="text-[10px] text-slate-500 mt-1 leading-relaxed">É nela que você vai receber diretamente dos compradores — cada vendedor recebe na própria chave. Pode trocar depois em "Status da Loja".</p>
+            </div>
+
+            <label class="flex items-start gap-2 text-xs text-slate-400 leading-relaxed cursor-pointer text-left mb-6">
+                <input type="checkbox" id="become-seller-accept-terms" class="mt-0.5 w-4 h-4 flex-shrink-0">
+                <span>Li e aceito os Termos de Responsabilidade do Vendedor.</span>
+            </label>
+
+            <button onclick="window.APP.auth.confirmBecomeSeller()" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-2xl transition-all mb-2">
+                ✓ Confirmar e Virar Vendedor
+            </button>
+            <button onclick="window.APP.auth.closeBecomeSellerModal()" class="w-full text-slate-400 hover:text-white font-bold py-2 transition-all">Cancelar</button>
         </div>
     </div>
 
@@ -933,30 +1050,33 @@
         <i data-lucide="arrow-up"></i>
     </button>
 
+    
+
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
          ======================================== -->
-    <script src="config.js?v=3"></script>
-    <script src="storage.js?v=2"></script>
-    <script src="wrapper.js?v=1"></script>
-    <script src="auth.js?v=6"></script>
-    <script src="store-status.js?v=2"></script>
-    <script src="cart.js?v=2"></script>
-    <script src="products.js?v=7"></script>
-    <script src="ads.js?v=6"></script>
-    <script src="bi.js?v=9"></script>
-    <script src="navigation.js?v=3"></script>
-    <script src="tenants.js?v=6"></script>
-    <script src="orders.js?v=5"></script>
-    <script src="order-management.js?v=2"></script>
-    <script src="admin-warnings.js?v=2"></script>
-    <script src="vendor-settings.js?v=4"></script>
-    <script src="notifications.js?v=1"></script>
+    <script defer src="config.js?v=4"></script>
+    <script defer src="storage.js?v=2"></script>
+    <script defer src="wrapper.js?v=1"></script>
+    <script defer src="auth.js?v=8"></script>
+    <script defer src="store-status.js?v=2"></script>
+    <script defer src="cart.js?v=2"></script>
+    <script defer src="products.js?v=9"></script>
+    <script defer src="ads.js?v=7"></script>
+    <script defer src="bi.js?v=11"></script>
+    <script defer src="navigation.js?v=3"></script>
+    <script defer src="tenants.js?v=6"></script>
+    <script defer src="orders.js?v=6"></script>
+    <script defer src="order-management.js?v=2"></script>
+    <script defer src="admin-warnings.js?v=2"></script>
+    <script defer src="vendor-settings.js?v=5"></script>
+    <script defer src="notifications.js?v=1"></script>
     <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
          "pwa-install.js" que estava aqui não bate com nenhum arquivo,
          o que causaria um 404 silencioso. -->
-    <script src="pwa.js?v=2"></script>
-    <script src="app.js?v=3"></script>
+    <script defer src="pwa.js?v=2"></script>
+    <script defer src="app.js?v=4"></script>
+    <script defer src="theme-toggle.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->
     <script>

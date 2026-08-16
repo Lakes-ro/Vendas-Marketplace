@@ -1,17 +1,22 @@
 /**
- * CONFIG.JS v4.5
+ * CONFIG.JS v4.6
  * Inicialização ROBUSTA do Supabase - COM TABLES
  * ✅ window.formatBRL() — formatação de moeda no padrão brasileiro
  * ✅ window.buildWhatsAppLink() — helper global pro link do WhatsApp
  * ✅ v4.5 SEGURANÇA CRÍTICA: window.escapeHtml() — neutraliza qualquer
- *    texto digitado por vendedor ou cliente (nome, descrição de produto,
- *    texto de anúncio, etc.) antes de ele ser exibido na tela. Sem isso,
- *    qualquer pessoa — mesmo sem conta, só preenchendo o campo "Nome" no
- *    checkout — conseguia fazer um pedacinho de código rodar no
- *    navegador de quem visse aquele texto depois (inclusive o Admin
- *    Supremo no BI). Essa função é usada em TODO lugar do sistema que
- *    mostra texto vindo de fora (products.js, ads.js, bi.js, tenants.js,
- *    orders.js, order-management.js, admin-warnings.js).
+ *    texto digitado por vendedor ou cliente antes de ele ser exibido na
+ *    tela.
+ * ✅ v4.6 NOVO — PERFORMANCE: window.compressImage() — comprime fotos
+ *    no PRÓPRIO NAVEGADOR (usando <canvas>, sem depender de nenhuma
+ *    biblioteca externa) antes de subir pro Supabase. Fotos tiradas
+ *    direto da câmera do celular costumam vir com 8-15MB — sem isso,
+ *    cada uma ia inteira pro servidor, tornando o cadastro de produto
+ *    (e de anúncio) extremamente lento em conexão de internet comum.
+ *    Redimensiona pro máximo de 1600px no lado maior e comprime como
+ *    JPEG (qualidade 0.75) — na prática costuma reduzir o arquivo em
+ *    80-95%, sem perda visível de qualidade em tela de celular/produto.
+ *    Usado em products.js (fotos de produto) e ads.js (banner com
+ *    imagem). Vídeos e GIFs NUNCA passam por aqui (ver a função).
  */
 
 if (typeof window.CONFIG_LOADED !== 'undefined') {
@@ -77,11 +82,8 @@ if (typeof window.CONFIG_LOADED !== 'undefined') {
     };
 
     /**
-     * ✅ NOVO (v4.5) SEGURANÇA: neutraliza caracteres HTML perigosos antes
-     * de qualquer texto de terceiro (nome, descrição, título, etc.) ser
-     * inserido na tela via innerHTML. Uso: `window.escapeHtml(valor)` no
-     * lugar de usar o valor cru dentro de qualquer template string que
-     * vá para innerHTML.
+     * ✅ SEGURANÇA: neutraliza caracteres HTML perigosos antes de
+     * qualquer texto de terceiro ser inserido na tela via innerHTML.
      */
     window.escapeHtml = function(str) {
         if (str === null || str === undefined) return '';
@@ -91,6 +93,108 @@ if (typeof window.CONFIG_LOADED !== 'undefined') {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    };
+
+    /**
+     * ✅ NOVO (v4.6) PERFORMANCE: comprime uma imagem no navegador antes
+     * do upload — redimensiona pro máximo de `maxWidth`/`maxHeight`
+     * (padrão 1600px) e recodifica como JPEG na qualidade informada
+     * (padrão 0.75). Resolve produtos.js e ads.js.
+     *
+     * Regras de segurança/qualidade:
+     *  - Não mexe em vídeos (não é imagem) — resolve com o arquivo
+     *    original sem tocar.
+     *  - Não mexe em GIF — comprimir como JPEG destruiria a animação.
+     *  - Não mexe em arquivos já pequenos (< 300KB) — não vale a pena
+     *    o custo de processar uma imagem que já é leve.
+     *  - Se por algum motivo a versão "comprimida" sair MAIOR que a
+     *    original (raro, acontece com imagens já bem otimizadas), usa
+     *    a original mesmo.
+     *  - Se der qualquer erro no meio do processo (imagem corrompida,
+     *    navegador sem suporte a canvas, etc.), devolve o arquivo
+     *    ORIGINAL — nunca trava o upload por causa da compressão.
+     *
+     * Uso: const arquivoParaSubir = await window.compressImage(file);
+     */
+    window.compressImage = function(file, options = {}) {
+        const maxWidth  = options.maxWidth  || 1600;
+        const maxHeight = options.maxHeight || 1600;
+        const quality   = options.quality   || 0.75;
+        const minSizeToCompress = options.minSizeToCompress || 300 * 1024;
+
+        return new Promise((resolve) => {
+            try {
+                if (!file || !file.type || !file.type.startsWith('image/')) {
+                    resolve(file);
+                    return;
+                }
+                if (file.type === 'image/gif') {
+                    resolve(file);
+                    return;
+                }
+                if (file.size < minSizeToCompress) {
+                    resolve(file);
+                    return;
+                }
+
+                const objectUrl = URL.createObjectURL(file);
+                const img = new Image();
+
+                img.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+
+                    try {
+                        let { width, height } = img;
+
+                        if (width > maxWidth || height > maxHeight) {
+                            const ratio = Math.min(maxWidth / width, maxHeight / height);
+                            width = Math.round(width * ratio);
+                            height = Math.round(height * ratio);
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) { resolve(file); return; }
+
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        canvas.toBlob((blob) => {
+                            if (!blob || blob.size >= file.size) {
+                                resolve(file);
+                                return;
+                            }
+
+                            const compressedName = file.name.replace(/\.\w+$/, '') + '.jpg';
+                            const compressedFile = new File([blob], compressedName, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+
+                            window.log?.(
+                                `📷 Imagem comprimida: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(1)}MB`,
+                                'success'
+                            );
+
+                            resolve(compressedFile);
+                        }, 'image/jpeg', quality);
+                    } catch (innerErr) {
+                        resolve(file);
+                    }
+                };
+
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(file);
+                };
+
+                img.src = objectUrl;
+            } catch (err) {
+                resolve(file);
+            }
+        });
     };
 
     window._supabase = null;

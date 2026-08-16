@@ -1,36 +1,53 @@
 /**
- * SW.JS v4.0 - SERVICE WORKER CORRIGIDO
- * ✅ Todos os arquivos do projeto incluídos no cache
- * ✅ Versão bumpeada para forçar atualização do cache antigo
- * ✅ Estratégia Network First
+ * SW.JS v5.0 - LISTA DE CACHE CORRIGIDA (auditoria)
+ * ✅ Estratégia Network First (mantida)
+ * ✅ v5.0 FIX: a lista de arquivos pré-cacheados estava desatualizada —
+ *    apontava para "./admin.js" (arquivo que não existe mais no
+ *    projeto) e não incluía vários arquivos que hoje fazem parte do
+ *    sistema (tenants.js, vendor-settings.js, notifications.js, pwa.js,
+ *    theme.css, theme-toggle.js, tailwind.built.css, manifest.json).
+ *    Na prática, isso significava que quase nada ficava salvo em cache
+ *    de verdade — toda visita repetida baixava tudo de novo da rede,
+ *    mesmo com o Service Worker "funcionando". Agora a lista reflete
+ *    os arquivos reais servidos pelo index.html.
+ * ✅ CACHE_VERSION subiu para forçar a troca do cache antigo/quebrado
+ *    em todos os aparelhos que já tinham o Service Worker instalado.
  */
 
-const CACHE_VERSION = 'marketplace-v4.0';
+const CACHE_VERSION = 'marketplace-v5.1';
 const CACHE_NAME = CACHE_VERSION;
 
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
-    './style.css',
-    './store status.css',
     './manifest.json',
-    // Módulos JS — ordem não importa para cache
+
+    // Estilos
+    './style.css',
+    './theme.css',
+    './tailwind.built.css',
+
+    // Módulos JS — mesma ordem do index.html (não é obrigatório pro
+    // cache, mas facilita conferir se algum arquivo real ficou de fora)
     './config.js',
     './storage.js',
     './wrapper.js',
     './auth.js',
     './store-status.js',
     './cart.js',
-    './admin.js',
     './products.js',
     './ads.js',
     './bi.js',
     './navigation.js',
     './tenants.js',
     './orders.js',
-    './admin-warnings.js',
     './order-management.js',
-    './app.js'
+    './admin-warnings.js',
+    './vendor-settings.js',
+    './notifications.js',
+    './pwa.js',
+    './app.js',
+    './theme-toggle.js'
 ];
 
 // ========================================

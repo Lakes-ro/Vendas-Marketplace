@@ -1,5 +1,5 @@
 /**
- * VENDOR-SETTINGS.JS v3.2
+ * VENDOR-SETTINGS.JS v3.3
  * ✅ Status da loja (online/offline) via Supabase, com horário automático
  *    aplicado no servidor (pg_cron) — client só relê e reflete
  * ✅ "Fechar a Loja Inteira" — botão de emergência que só o Admin Supremo
@@ -20,6 +20,12 @@
  *    try/catch em app.js) — e é por isso que Products, Ads, Cart etc.
  *    nunca chegavam a carregar. Essa é a causa raiz de "os produtos não
  *    aparecem".
+ * ✅ v3.3 NOVO: card "Minha Chave Pix" — o vendedor cadastra a chave Pix
+ *    dele aqui (a mesma que ele já preenche ao virar vendedor pela
+ *    primeira vez, no modal "QUERO VENDER") e pode trocá-la a qualquer
+ *    momento. É essa chave que aparece pro comprador no checkout,
+ *    dentro do bloco de pagamento Pix DESSE vendedor especificamente
+ *    (cada vendedor tem a própria, ver orders.js).
  */
 
 const VendorSettings = {
@@ -34,10 +40,14 @@ const VendorSettings = {
     // Estado do fechamento global de emergência
     _globalOverride: null,
 
+    // ✅ NOVO (v3.3): chave Pix do próprio vendedor
+    pixKey: '',
+
     async init() {
         try {
             await this.loadStatus();
             await this.loadHistory();
+            await this.loadPixKey();
             this.render();
             this.attachListeners();
             this._startAutoRefresh();
@@ -56,6 +66,7 @@ const VendorSettings = {
     async refresh() {
         await this.loadStatus();
         await this.loadHistory();
+        await this.loadPixKey();
         this.render();
 
         // Recarrega o painel de emergência toda vez que a aba abre
@@ -131,6 +142,65 @@ const VendorSettings = {
         }
     },
 
+    /**
+     * ✅ NOVO (v3.3): busca a chave Pix atual do vendedor logado.
+     */
+    async loadPixKey() {
+        try {
+            const userId = window.APP?.auth?.userId;
+            if (!userId) return;
+
+            const { data, error } = await _supabase
+                .from('profiles')
+                .select('pix_key')
+                .eq('id', userId)
+                .maybeSingle();
+
+            if (error) throw error;
+            this.pixKey = data?.pix_key || '';
+        } catch (err) {
+            console.error('Erro ao carregar chave Pix:', err);
+        }
+    },
+
+    /**
+     * ✅ NOVO (v3.3): salva/atualiza a chave Pix do vendedor logado.
+     * Essa é a chave que aparece pro comprador no checkout, no bloco
+     * de pagamento Pix específico desse vendedor.
+     */
+    async savePixKey() {
+        const userId = window.APP?.auth?.userId;
+        if (!userId) {
+            alert('❌ Você precisa estar logado');
+            return;
+        }
+
+        const input = document.getElementById('vendor-pix-key-input');
+        const value = input?.value?.trim();
+
+        if (!value) {
+            alert('❌ Digite uma chave Pix válida (CPF/CNPJ, e-mail, telefone ou chave aleatória).');
+            return;
+        }
+
+        try {
+            const { error } = await _supabase
+                .from('profiles')
+                .update({ pix_key: value })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            this.pixKey = value;
+            if (window.APP?.auth?.profile) window.APP.auth.profile.pix_key = value;
+
+            alert('✅ Chave Pix salva! É essa chave que vai aparecer pros compradores no checkout.');
+        } catch (err) {
+            console.error('Erro ao salvar chave Pix:', err);
+            alert(`❌ Erro ao salvar chave Pix: ${err.message}`);
+        }
+    },
+
     render() {
         const statusBtn = document.getElementById('vendor-status-main-toggle');
         const statusText = document.getElementById('vendor-status-main-text');
@@ -138,6 +208,7 @@ const VendorSettings = {
         const autoToggle = document.getElementById('vendor-auto-schedule-toggle');
         const scheduleInputs = document.getElementById('vendor-schedule-inputs');
         const historyList = document.getElementById('vendor-history-list');
+        const pixInput = document.getElementById('vendor-pix-key-input');
 
         const isOnline = this.currentStatus;
 
@@ -168,6 +239,11 @@ const VendorSettings = {
         const closingInput = document.getElementById('vendor-closing-time');
         if (openingInput) openingInput.value = this.openingTime;
         if (closingInput) closingInput.value = this.closingTime;
+
+        // ✅ NOVO (v3.3)
+        if (pixInput && document.activeElement !== pixInput) {
+            pixInput.value = this.pixKey || '';
+        }
 
         if (historyList) {
             historyList.innerHTML = this.renderHistory();
@@ -202,6 +278,7 @@ const VendorSettings = {
         const autoToggle = document.getElementById('vendor-auto-schedule-toggle');
         const scheduleInputs = document.getElementById('vendor-schedule-inputs');
         const saveBtn = document.getElementById('vendor-save-schedule-btn');
+        const savePixBtn = document.getElementById('vendor-save-pix-btn');
 
         if (statusBtn) {
             statusBtn.addEventListener('click', () => this.toggleStatus());
@@ -219,6 +296,11 @@ const VendorSettings = {
 
         if (saveBtn) {
             saveBtn.addEventListener('click', () => this.saveSchedule());
+        }
+
+        // ✅ NOVO (v3.3)
+        if (savePixBtn) {
+            savePixBtn.addEventListener('click', () => this.savePixKey());
         }
     },
 

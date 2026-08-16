@@ -1,5 +1,5 @@
 /**
- * AUTH.JS v8.5
+ * AUTH.JS v8.7
  * ✅ Botão de logout mostra avatar, nome, email e role do usuário logado
  * ✅ Bottom nav sincronizado
  * ✅ loginDirect / signupDirect / resetPasswordDirect
@@ -14,6 +14,22 @@
  *    "Sair" — o cartão de perfil ficava "grudado" na tela depois de
  *    desconectar. Agora fecha o modal de perfil e o de login
  *    imediatamente após confirmar o logout.
+ * ✅ v8.6 FIX CRÍTICO DE REGRA DE NEGÓCIO: toda conta NOVA estava
+ *    nascendo com role='seller' (Vendedor) por padrão — só o e-mail do
+ *    Admin Supremo era exceção. Agora toda conta nova nasce 'client' —
+ *    comprar nunca exigiu login, login só dá histórico/carrinho/
+ *    favoritos, e pra vender de verdade a pessoa precisa ir no cartão
+ *    de perfil (botão de conta) e tocar em "🚀 QUERO VENDER".
+ * ✅ v8.6 NOVO: "🚀 QUERO VENDER" abre um modal de TERMOS DE
+ *    RESPONSABILIDADE DO VENDEDOR — precisa marcar "Li e aceito" antes
+ *    do botão de confirmar promover a conta.
+ * ✅ v8.7 NOVO: o mesmo modal de "Virar Vendedor" agora também exige a
+ *    CHAVE PIX do vendedor (campo obrigatório) — é essa chave que
+ *    aparece pro comprador no checkout, dentro do bloco de pagamento
+ *    Pix específico desse vendedor (cada vendedor recebe na própria
+ *    chave, não mais numa chave única da loja — ver orders.js). A
+ *    chave pode ser trocada depois em "Status da Loja" → "Minha Chave
+ *    Pix" (vendor-settings.js).
  */
 
 const Auth = {
@@ -61,19 +77,25 @@ const Auth = {
                 // Perfil não existe — criar
                 const userEmail    = this.session.user.email;
                 const isSuperAdmin = this.SUPREME_ADMINS.includes(userEmail);
+                // ✅ FIX v8.6: toda conta nova nasce 'client' — só o(s)
+                // e-mail(s) da lista SUPREME_ADMINS nascem 'supreme'.
+                // NINGUÉM mais nasce 'seller' automaticamente; pra vender,
+                // a pessoa precisa passar pelo fluxo "QUERO VENDER"
+                // (becomeSeller), que exige aceitar os Termos de
+                // Responsabilidade do Vendedor e cadastrar a chave Pix.
                 const { error: insertError } = await _supabase.from('profiles').insert([{
                     id:        this.session.user.id,
                     email:     userEmail,
                     full_name: this.session.user.user_metadata?.full_name || 'Usuário',
                     phone:     this.session.user.user_metadata?.phone || '',
-                    role:      isSuperAdmin ? 'supreme' : 'seller',
+                    role:      isSuperAdmin ? 'supreme' : 'client',
                     status:    'active'
                 }]);
                 if (insertError) throw insertError;
                 this.profile = {
                     id: this.session.user.id, email: userEmail,
                     full_name: this.session.user.user_metadata?.full_name || 'Usuário',
-                    role: isSuperAdmin ? 'supreme' : 'seller', status: 'active'
+                    role: isSuperAdmin ? 'supreme' : 'client', status: 'active'
                 };
                 this.role = this.profile.role;
                 log(`✅ Perfil criado: ${this.role}`, 'success');
@@ -286,9 +308,37 @@ const Auth = {
         if (window.lucide) lucide.createIcons();
     },
 
+    // ── Termos de Responsabilidade do Vendedor (leitura) ──────
+    openSellerTermsModal() {
+        const modal = document.getElementById('seller-terms-modal');
+        if (modal) modal.classList.remove('hidden');
+    },
+    closeSellerTermsModal() {
+        const modal = document.getElementById('seller-terms-modal');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    // ── Modal de confirmação "QUERO VENDER" (termos + chave Pix) ──
+    openBecomeSellerModal() {
+        const checkbox = document.getElementById('become-seller-accept-terms');
+        if (checkbox) checkbox.checked = false;
+        // ✅ NOVO (v8.7): limpa o campo de chave Pix toda vez que o
+        // modal abre, pra não herdar texto de uma tentativa anterior.
+        const pixInput = document.getElementById('become-seller-pix-key');
+        if (pixInput) pixInput.value = '';
+        const modal = document.getElementById('become-seller-modal');
+        if (modal) modal.classList.remove('hidden');
+    },
+    closeBecomeSellerModal() {
+        const modal = document.getElementById('become-seller-modal');
+        if (modal) modal.classList.add('hidden');
+    },
+
     /**
-     * Promove a PRÓPRIA conta de 'client' para 'seller'. Só funciona pra
-     * quem está logado como Cliente.
+     * Só ABRE o modal de confirmação (termos + chave Pix) — quem
+     * promove de verdade a conta é confirmBecomeSeller(), chamada só
+     * depois da pessoa preencher a chave Pix, marcar "Li e aceito" e
+     * tocar em "Confirmar e Virar Vendedor".
      */
     async becomeSeller() {
         if (!this.session || !this.userId) {
@@ -301,17 +351,48 @@ const Auth = {
             return;
         }
 
-        if (!confirm('Deseja se tornar um Vendedor?\n\nVocê passará a poder cadastrar produtos, gerenciar estoque e ver seu próprio painel de BI.')) return;
+        this.openBecomeSellerModal();
+    },
+
+    /**
+     * ✅ v8.7: promove a PRÓPRIA conta de 'client' para 'seller' — só
+     * executa se (1) o checkbox de aceite dos Termos de Responsabilidade
+     * do Vendedor estiver marcado E (2) a chave Pix tiver sido
+     * preenchida. Salva role E pix_key no mesmo UPDATE. Chamada pelo
+     * botão "✓ Confirmar e Virar Vendedor" dentro do modal aberto por
+     * becomeSeller().
+     */
+    async confirmBecomeSeller() {
+        const checkbox = document.getElementById('become-seller-accept-terms');
+        if (!checkbox || !checkbox.checked) {
+            alert('❌ Você precisa marcar "Li e aceito os Termos de Responsabilidade do Vendedor" antes de continuar.');
+            return;
+        }
+
+        const pixInput = document.getElementById('become-seller-pix-key');
+        const pixKey = pixInput?.value?.trim();
+        if (!pixKey) {
+            alert('❌ Informe sua chave Pix (CPF/CNPJ, e-mail, telefone ou chave aleatória) — é nela que você vai receber dos compradores.');
+            pixInput?.focus();
+            return;
+        }
+
+        if (!this.session || !this.userId) {
+            alert('❌ Você precisa estar logado');
+            return;
+        }
 
         try {
             const { error } = await _supabase
                 .from('profiles')
-                .update({ role: 'seller' })
+                .update({ role: 'seller', pix_key: pixKey })
                 .eq('id', this.userId);
 
             if (error) throw error;
 
             log('✅ Conta promovida a vendedor', 'success');
+
+            this.closeBecomeSellerModal();
             alert('✅ Pronto! Agora você é um vendedor.');
 
             this.closeProfileModal();
@@ -438,6 +519,8 @@ const Auth = {
             // ✅ NOVO (v8.5): fecha qualquer modal que tenha ficado aberto
             this.closeProfileModal();
             this.closeAuthModal();
+            this.closeBecomeSellerModal();
+            this.closeSellerTermsModal();
 
             this.renderUIByRole();
             window.APP?.navigation?.showTab('market');

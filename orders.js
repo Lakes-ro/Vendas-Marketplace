@@ -1,16 +1,28 @@
 /**
- * ORDERS.JS v4.2
+ * ORDERS.JS v5.0
  * ✅ sendOrderDirect() para botão onclick sem form
  * ✅ StoreStatus.canCheckout() validado antes de processar
  * ✅ v4.1: ícone de WhatsApp compacto ao lado de cada item no comprovante,
  *    pro cliente falar com o vendedor daquele produto
  * ✅ v4.1: mensagem amigável quando o banco recusa a compra (loja fechada
  *    por horário/Sabbath, ou vendedor offline)
- * ✅ v4.2 NOVO: dentro do bloco Pix do comprovante, o cliente agora pode
- *    anexar o comprovante de pagamento (imagem/PDF, até 5MB) OU mandar
- *    via WhatsApp pro número da loja. O upload salva a URL em
- *    orders.payment_proof_url — quem confirma que o pagamento realmente
- *    caiu é sempre o Admin Supremo (na tela de BI), nunca automático.
+ * ✅ v4.2: upload de comprovante Pix (imagem/PDF) OU envio via WhatsApp
+ *    — quem confirma o pagamento é o Admin Supremo, no BI.
+ * ✅ v5.0 NOVO — PIX POR VENDEDOR: antes, todo pagamento Pix ia pra UMA
+ *    chave única da loja e só o Admin Supremo confirmava. Agora, cada
+ *    vendedor tem sua PRÓPRIA chave Pix (cadastrada no perfil dele) e
+ *    confirma o próprio pagamento. Se o carrinho tiver produtos de mais
+ *    de um vendedor, o comprovante mostra UM BLOCO DE PAGAMENTO PIX
+ *    SEPARADO por vendedor — cada um com a chave, o valor daquela
+ *    parte, o upload de comprovante e o link de WhatsApp direto pro
+ *    vendedor dono daquele produto.
+ *    Importante: create_order() NÃO foi alterada (continua validando
+ *    loja aberta/estoque/preço exatamente como antes). A separação por
+ *    vendedor acontece em cima do pedido já criado, usando a função
+ *    register_order_vendor_payments() (recalcula os valores direto de
+ *    order_items/products no banco — nunca confia em número vindo do
+ *    navegador) e attach_vendor_payment_proof()/confirm_vendor_payment()
+ *    (nova migração — ver migracao_pix_por_vendedor.sql).
  */
 
 const Orders = {
@@ -43,19 +55,80 @@ const Orders = {
         }
     },
 
-    // ✅ Versão Direct — chamada pelo botão onclick sem form
-    // ✅ v5.0 FIX CRÍTICO: antes, este método fazia a criação do pedido
-    // "na mão" — inserir em orders, depois em order_items, depois dar
-    // update no estoque, tudo em chamadas separadas direto do navegador.
-    // Isso SÓ funcionava se o banco tivesse uma política de RLS
-    // liberando INSERT anônimo em orders/order_items — e uma auditoria
-    // no banco (Supabase) mostrou que essa política NUNCA existiu. Ou
-    // seja, checkout estava fadado a falhar (bloqueado pela segurança
-    // do próprio banco) para qualquer cliente, sempre.
-    // A função `create_order()` já existia pronta no banco (RPC
-    // SECURITY DEFINER: valida loja aberta, vendedor online, estoque, e
-    // calcula o preço a partir do produto real — não confia no preço
-    // que vem do carrinho) mas nunca era chamada por aqui. Agora é.
+    /**
+     * ✅ NOVO (v5.0): busca owner_id + nome/telefone/chave Pix do
+     * vendedor de cada produto do carrinho, numa única consulta —
+     * mesma consulta pública que a vitrine já usa (products.js), então
+     * não depende de nenhuma mudança em create_order() nem exige o
+     * comprador estar logado.
+     */
+    async _buildVendorMapForCart(productIds) {
+        const map = {};
+        if (!productIds.length) return map;
+
+        try {
+            const { data, error } = await _supabase
+                .from('products')
+                .select('id, owner_id, profiles!owner_id(full_name, phone, pix_key)')
+                .in('id', productIds);
+
+            if (error) throw error;
+
+            (data || []).forEach(p => {
+                map[p.id] = {
+                    ownerId: p.owner_id,
+                    vendorName: p.profiles?.full_name || 'Vendedor',
+                    vendorPhone: p.profiles?.phone || null,
+                    pixKey: p.profiles?.pix_key || null
+                };
+            });
+        } catch (err) {
+            log(`⚠️ Não foi possível identificar os vendedores do carrinho: ${err.message}`, 'warning');
+        }
+
+        return map;
+    },
+
+    /**
+     * ✅ NOVO (v5.0): agrupa os itens do carrinho por vendedor (owner_id),
+     * usando o mapa buscado em _buildVendorMapForCart(). Cada grupo vira
+     * um bloco de pagamento Pix próprio no comprovante.
+     * ⚠️ O subtotal aqui é calculado com o preço que estava no carrinho
+     * no momento da compra — é só o valor MOSTRADO pro comprador/vendedor
+     * se organizarem. O valor que realmente conta pra confirmação de
+     * pagamento é recalculado no banco (register_order_vendor_payments),
+     * direto de order_items, então nunca depende desse número do navegador.
+     */
+    _groupCartByVendor(cartItems, vendorMap) {
+        const groups = {};
+
+        cartItems.forEach(item => {
+            const info = vendorMap[item.id] || {};
+            const vendorId = info.ownerId || 'desconhecido';
+
+            if (!groups[vendorId]) {
+                groups[vendorId] = {
+                    vendorId,
+                    vendorName: info.vendorName || 'Vendedor',
+                    vendorPhone: info.vendorPhone || null,
+                    pixKey: info.pixKey || null,
+                    subtotal: 0,
+                    itemNames: []
+                };
+            }
+
+            groups[vendorId].subtotal += Number(item.price) || 0;
+            groups[vendorId].itemNames.push(item.name);
+        });
+
+        return Object.values(groups);
+    },
+
+    // ✅ v5.0 FIX CRÍTICO (mantido de versões anteriores): checkout
+    // continua indo 100% pela função create_order() (RPC SECURITY
+    // DEFINER: valida loja aberta, vendedor online, estoque, e calcula
+    // o preço a partir do produto real — não confia no preço que vem do
+    // carrinho). Essa função NÃO foi tocada nesta versão.
     async sendOrderDirect() {
         const customerName = document.getElementById('cust-name')?.value?.trim();
         const customerPhone = document.getElementById('cust-phone')?.value?.trim();
@@ -85,6 +158,13 @@ const Orders = {
 
             log('🚀 Iniciando processamento do pedido...', 'info');
 
+            // ✅ NOVO (v5.0): identifica o(s) vendedor(es) do carrinho ANTES
+            // de criar o pedido — assim já temos as chaves Pix prontas pra
+            // montar o comprovante assim que a compra for confirmada.
+            const productIds = [...new Set(items.map(i => i.id))];
+            const vendorMap = await this._buildVendorMapForCart(productIds);
+            const vendorGroups = this._groupCartByVendor(items, vendorMap);
+
             // Agrupa quantidades por produto (cada unidade adicionada ao
             // carrinho vira uma entrada própria em Cart.items).
             const qtyMap = {};
@@ -106,6 +186,20 @@ const Orders = {
             const orderId = result.order_id;
             const totalAmount = result.total_amount;
             log('✅ Pedido criado: ' + orderId, 'success');
+
+            // ✅ NOVO (v5.0): cria a "fatia" de cada vendedor pra esse
+            // pedido (idempotente — se já existir, não duplica). Isso
+            // recalcula os valores direto de order_items/products no
+            // banco, então é sempre confiável mesmo que o preço mostrado
+            // no carrinho já não bata mais exatamente. Se a migração
+            // ainda não tiver sido aplicada no banco, isso falha
+            // silenciosamente (com aviso no console) — a compra em si
+            // já foi concluída com sucesso de qualquer forma.
+            try {
+                await _supabase.rpc('register_order_vendor_payments', { p_order_id: orderId });
+            } catch (splitErr) {
+                log(`⚠️ Não foi possível separar o pagamento por vendedor: ${splitErr.message}`, 'warning');
+            }
 
             // Recarregar produtos para refletir o novo estoque (a baixa já
             // foi feita dentro da própria função, com trava de linha —
@@ -135,6 +229,7 @@ const Orders = {
                 payment_method: paymentMethod,
                 total_amount: totalAmount,
                 items: itemsWithVendor,
+                vendor_groups: vendorGroups,
                 timestamp: new Date()
             });
 
@@ -167,37 +262,33 @@ const Orders = {
     },
 
     /**
-     * ✅ NOVO (v4.2): monta o link do WhatsApp pra enviar o comprovante Pix
-     * pro número central da loja (mesmo usado no fallback de "Anuncie Aqui"
-     * em ads.js), já com uma mensagem pronta citando o número do pedido.
+     * ✅ v5.0: link de WhatsApp pra enviar o comprovante Pix direto pro
+     * VENDEDOR daquele grupo (antes ia sempre pro número fixo da loja).
+     * Se o vendedor não tiver telefone cadastrado, retorna null e o
+     * botão correspondente simplesmente não aparece.
      */
-    _buildProofWhatsAppLink(orderData) {
-        const storeWhatsApp = '5535991264352';
+    _buildVendorProofWhatsAppLink(orderData, group) {
+        if (!group.vendorPhone) return null;
+        const link = window.buildWhatsAppLink ? window.buildWhatsAppLink(group.vendorPhone) : null;
+        if (!link) return null;
         const orderCode = orderData.order_id.slice(0, 8).toUpperCase();
-        const message = `Olá! Segue o comprovante do pedido #${orderCode}, no valor de R$ ${window.formatBRL(orderData.total_amount)}.`;
-        return `https://wa.me/${storeWhatsApp}?text=${encodeURIComponent(message)}`;
+        const message = `Olá! Segue o comprovante do pedido #${orderCode}, no valor de R$ ${window.formatBRL(group.subtotal)}.`;
+        return `${link}?text=${encodeURIComponent(message)}`;
     },
 
     /**
-     * ✅ NOVO (v4.2): faz upload do comprovante Pix (imagem ou PDF, até 5MB)
-     * pro bucket 'payment-proofs' e salva a URL pública no pedido. Isso NÃO
-     * confirma o pagamento sozinho — só o Admin Supremo pode confirmar,
-     * depois de conferir o comprovante (o banco garante isso via trigger).
+     * ✅ NOVO (v5.0): upload do comprovante Pix da fatia de UM vendedor
+     * específico dentro do pedido. Usa attach_vendor_payment_proof()
+     * (RPC, confere o telefone do pedido antes de aceitar — igual a
+     * attach_payment_proof() fazia antes, só que agora por vendedor).
      */
-    /**
-     * ✅ v5.0 FIX: antes fazia um `.from('orders').update(...)` direto —
-     * a única política de UPDATE em orders é "só Admin Supremo", então
-     * isso sempre falhava pra qualquer cliente anônimo tentando anexar
-     * o comprovante (o botão dava erro de permissão sempre). Agora usa
-     * a função `attach_payment_proof()` (RPC, ignora RLS de propósito) —
-     * que também confere o telefone do pedido antes de aceitar.
-     */
-    async uploadPaymentProof(orderId, inputEl, customerPhone) {
+    async uploadVendorPaymentProof(orderId, vendorId, inputEl, customerPhone) {
         const file = inputEl?.files?.[0];
         if (!file) return;
 
-        const statusEl = document.getElementById(`proof-status-${orderId}`);
-        const zoneEl = document.getElementById(`proof-zone-${orderId}`);
+        const zoneKey = `${orderId}-${vendorId}`;
+        const statusEl = document.getElementById(`proof-status-${zoneKey}`);
+        const zoneEl = document.getElementById(`proof-zone-${zoneKey}`);
         const setStatus = (text, color) => {
             if (statusEl) {
                 statusEl.textContent = text;
@@ -213,7 +304,7 @@ const Orders = {
         try {
             setStatus('⏳ Enviando comprovante...', 'text-slate-400');
 
-            const fileName = `${orderId}-${Date.now()}-${file.name}`;
+            const fileName = `${orderId}-${vendorId}-${Date.now()}-${file.name}`;
 
             const { error: uploadError } = await _supabase.storage
                 .from('payment-proofs')
@@ -225,22 +316,93 @@ const Orders = {
                 .from('payment-proofs')
                 .getPublicUrl(fileName);
 
-            const { error: attachError } = await _supabase.rpc('attach_payment_proof', {
+            const { error: attachError } = await _supabase.rpc('attach_vendor_payment_proof', {
                 p_order_id: orderId,
+                p_vendor_id: vendorId,
                 p_proof_path: publicUrl.publicUrl,
                 p_customer_phone: customerPhone
             });
 
             if (attachError) throw attachError;
 
-            setStatus('✅ Comprovante enviado! Aguarde a confirmação.', 'text-green-400');
+            setStatus('✅ Comprovante enviado! Aguarde a confirmação do vendedor.', 'text-green-400');
             if (zoneEl) zoneEl.classList.add('hidden');
 
-            log('✅ Comprovante de pagamento enviado', 'success');
+            log('✅ Comprovante de pagamento enviado (por vendedor)', 'success');
         } catch (err) {
             log(`❌ Erro ao enviar comprovante: ${err.message}`, 'error');
             setStatus(`❌ Erro: ${err.message}`, 'text-red-400');
         }
+    },
+
+    /**
+     * ✅ v5.0: monta UM bloco de pagamento Pix por vendedor (chave, valor
+     * daquela fatia, upload de comprovante próprio e link de WhatsApp
+     * direto pro vendedor). Se o vendedor ainda não tiver cadastrado a
+     * própria chave Pix, mostra um aviso no lugar da chave, mas continua
+     * permitindo falar com ele por WhatsApp.
+     */
+    _renderVendorPixBlock(orderData, group) {
+        const esc = window.escapeHtml || ((s) => s);
+        const zoneKey = `${orderData.order_id}-${group.vendorId}`;
+        const safeVendorName = esc(group.vendorName);
+        const waLink = this._buildVendorProofWhatsAppLink(orderData, group);
+
+        const pixKeyBlock = group.pixKey ? `
+            <div class="bg-white/10 p-3 rounded-xl text-center">
+                <div class="text-xs text-slate-500 mb-2">Chave Pix de ${safeVendorName}</div>
+                <div class="text-white font-mono text-sm break-all font-bold">${esc(group.pixKey)}</div>
+                <button onclick="navigator.clipboard.writeText('${esc(group.pixKey).replace(/'/g, "\\'")}'); this.innerText = '✅ COPIADO!'" class="mt-2 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-500 w-full font-bold">
+                    📋 COPIAR CHAVE
+                </button>
+            </div>
+        ` : `
+            <div class="bg-red-900/20 border border-red-500/30 p-3 rounded-xl text-center">
+                <div class="text-xs text-red-300 leading-relaxed">
+                    ⚠️ ${safeVendorName} ainda não cadastrou uma chave Pix.<br>Combine o pagamento direto pelo WhatsApp abaixo.
+                </div>
+            </div>
+        `;
+
+        return `
+            <div class="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-black text-white">👤 ${safeVendorName}</span>
+                    <span class="text-sm font-black text-green-400">R$ ${window.formatBRL(group.subtotal)}</span>
+                </div>
+                <div class="text-[11px] text-slate-500">${esc(group.itemNames.join(', '))}</div>
+
+                ${pixKeyBlock}
+
+                <div>
+                    <div id="proof-zone-${zoneKey}"
+                         class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center hover:border-blue-500 transition-colors cursor-pointer"
+                         onclick="document.getElementById('proof-input-${zoneKey}').click()">
+                        <input type="file" id="proof-input-${zoneKey}"
+                               accept="image/jpeg,image/png,image/webp,application/pdf"
+                               class="hidden"
+                               onchange="window.APP.orders.uploadVendorPaymentProof('${orderData.order_id}', '${group.vendorId}', this, '${esc(orderData.customer_phone).replace(/'/g, "\\'")}')">
+                        <div class="text-2xl mb-1">📎</div>
+                        <div class="text-xs font-bold text-slate-300">Toque para anexar o comprovante</div>
+                        <div class="text-[10px] text-slate-500 mt-1">JPG, PNG ou PDF · máx. 5MB</div>
+                    </div>
+                    <div id="proof-status-${zoneKey}" class="text-xs text-center mt-2"></div>
+
+                    ${waLink ? `
+                        <div class="flex items-center gap-2 my-2">
+                            <div class="flex-1 h-px bg-slate-700"></div>
+                            <span class="text-[10px] text-slate-500 uppercase">ou</span>
+                            <div class="flex-1 h-px bg-slate-700"></div>
+                        </div>
+                        <a href="${waLink}" target="_blank" rel="noopener"
+                           class="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-xl transition-all text-sm">
+                            <i data-lucide="message-circle" class="w-4 h-4"></i>
+                            Enviar Comprovante via WhatsApp
+                        </a>
+                    ` : ''}
+                </div>
+            </div>
+        `;
     },
 
     async showReceipt(orderData) {
@@ -252,6 +414,11 @@ const Orders = {
         const esc = window.escapeHtml || ((s) => s);
         const safeCustomerName = esc(orderData.customer_name);
         const safeCustomerPhone = esc(orderData.customer_phone);
+
+        // ✅ NOVO (v5.0): um bloco de pagamento Pix por vendedor, em vez
+        // de uma chave única da loja inteira.
+        const vendorGroups = orderData.vendor_groups || [];
+        const pixBlocksHtml = vendorGroups.map(g => this._renderVendorPixBlock(orderData, g)).join('');
 
         const receiptHTML = `
             <div class="fixed inset-0 z-[5000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
@@ -319,44 +486,18 @@ const Orders = {
                         ${orderData.payment_method === 'Pix' ? `
                             <div class="space-y-3">
                                 <div class="text-sm text-yellow-300"><strong>💳 Pague via Pix</strong></div>
-                                <div class="bg-white/10 p-3 rounded-xl text-center">
-                                    <div class="text-xs text-slate-500 mb-2">Chave Pix (Copia e Cola)</div>
-                                    <div class="text-white font-mono text-sm break-all font-bold">35991264352</div>
-                                    <button onclick="navigator.clipboard.writeText('35991264352'); this.innerText = '✅ COPIADO!'" class="mt-2 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-500 w-full font-bold">
-                                        📋 COPIAR CHAVE
-                                    </button>
+                                ${vendorGroups.length > 1 ? `
+                                    <p class="text-xs text-slate-400">
+                                        Esse pedido tem produtos de <strong class="text-white">${vendorGroups.length} vendedores diferentes</strong> —
+                                        pague cada um na própria chave Pix abaixo.
+                                    </p>
+                                ` : ''}
+
+                                <div class="space-y-3">
+                                    ${pixBlocksHtml}
                                 </div>
 
-                                <!-- ✅ NOVO: anexar comprovante do Pix -->
-                                <div>
-                                    <div class="text-xs text-slate-500 uppercase font-black mb-2">Comprovante Pix</div>
-                                    <div id="proof-zone-${orderData.order_id}"
-                                         class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center hover:border-blue-500 transition-colors cursor-pointer"
-                                         onclick="document.getElementById('proof-input-${orderData.order_id}').click()">
-                                        <input type="file" id="proof-input-${orderData.order_id}"
-                                               accept="image/jpeg,image/png,image/webp,application/pdf"
-                                               class="hidden"
-                                               onchange="window.APP.orders.uploadPaymentProof('${orderData.order_id}', this, '${esc(orderData.customer_phone).replace(/'/g, "\\'")}')">
-                                        <div class="text-2xl mb-1">📎</div>
-                                        <div class="text-xs font-bold text-slate-300">Toque para anexar o comprovante</div>
-                                        <div class="text-[10px] text-slate-500 mt-1">JPG, PNG ou PDF · máx. 5MB</div>
-                                    </div>
-                                    <div id="proof-status-${orderData.order_id}" class="text-xs text-center mt-2"></div>
-
-                                    <div class="flex items-center gap-2 my-2">
-                                        <div class="flex-1 h-px bg-slate-700"></div>
-                                        <span class="text-[10px] text-slate-500 uppercase">ou</span>
-                                        <div class="flex-1 h-px bg-slate-700"></div>
-                                    </div>
-
-                                    <a href="${this._buildProofWhatsAppLink(orderData)}" target="_blank" rel="noopener"
-                                       class="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-xl transition-all text-sm">
-                                        <i data-lucide="message-circle" class="w-4 h-4"></i>
-                                        Enviar Comprovante via WhatsApp
-                                    </a>
-                                </div>
-
-                                <p class="text-xs text-yellow-300 mt-2">⏱️ Seu pedido será confirmado assim que recebermos o comprovante.</p>
+                                <p class="text-xs text-yellow-300 mt-2">⏱️ Seu pedido será confirmado assim que o(s) vendedor(es) receber(em) o comprovante.</p>
                             </div>
                         ` : `
                             <div class="space-y-2">

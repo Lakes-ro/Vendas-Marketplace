@@ -1,5 +1,5 @@
 /**
- * BI.JS v9.5
+ * BI.JS v9.7
  * ✅ Gráfico "Top Produtos" com legenda HTML própria
  * ✅ Fallback de custo (unit_cost) via cost_price atual do produto
  * ✅ Filtro de período + detalhamento com itens/telefone/WhatsApp
@@ -11,67 +11,24 @@
  * ✅ v9.3 PERFORMANCE: custo dos produtos calculado 1x por atualização
  * ✅ v9.4: removidos Resumo Executivo e DRE (redundantes com os
  *    cartões de KPI) — substituídos pela barra visual de Custo vs Lucro
- * ✅ v9.5 NOVO: relatórios (Curva ABC, Ranking, Estoque Crítico, Giro
+ * ✅ v9.5: relatórios (Curva ABC, Ranking, Estoque Crítico, Giro
  *    de Estoque, Detalhamento) agora abrem/fecham individualmente
- *    (toggleSection), em vez de tudo aberto o tempo todo obrigando a
- *    rolar a tela inteira pra achar um relatório específico.
+ *    (toggleSection).
+ * ✅ v9.6: CONFIRMAÇÃO DE PAGAMENTO POR VENDEDOR — cada vendedor
+ *    recebe na própria chave Pix (ver orders.js) e confirma só a
+ *    PRÓPRIA fatia do pedido, usando order_vendor_payments. Pedidos de
+ *    antes da migração caem no modelo antigo (só Admin Supremo).
+ * ✅ v9.7 NOVO — PERFORMANCE: o Chart.js (~200KB) deixou de ser
+ *    carregado pra TODO visitante da loja (estava num <script> fixo no
+ *    <head> do index.html) — agora só baixa na hora em que alguém
+ *    realmente abre a aba BI (_ensureChartJsLoaded(), chamada no
+ *    início de loadDashboard()). Quem nunca entra no BI/Gestão (a
+ *    maioria dos visitantes, que só compram) nem baixa esse arquivo.
+ *    O registro do plugin de "valores no gráfico" (antes rodava solto
+ *    no topo do arquivo, antes de Chart.js sequer existir) virou o
+ *    método _registerValueLabelsPlugin(), chamado assim que o script
+ *    termina de carregar.
  */
-
-// ── Plugin custom de "data labels" (valores desenhados no próprio gráfico) ──
-if (typeof Chart !== 'undefined' && !window.__biValueLabelsPluginRegistered) {
-    Chart.register({
-        id: 'valueLabelsPlugin',
-        afterDatasetsDraw(chart, args, options) {
-            if (!options || options.formatter === false) return;
-            const { ctx } = chart;
-
-            chart.data.datasets.forEach((dataset, dsIndex) => {
-                const meta = chart.getDatasetMeta(dsIndex);
-                if (meta.hidden) return;
-
-                meta.data.forEach((element, index) => {
-                    const value = dataset.data[index];
-                    if (!value) return;
-
-                    const label = typeof options.formatter === 'function'
-                        ? options.formatter(value, dataset, index)
-                        : String(value);
-                    if (!label) return;
-
-                    let x, y;
-                    if (chart.config.type === 'doughnut' || chart.config.type === 'pie') {
-                        const angle = (element.startAngle + element.endAngle) / 2;
-                        const radius = (element.innerRadius + element.outerRadius) / 2;
-                        x = element.x + Math.cos(angle) * radius;
-                        y = element.y + Math.sin(angle) * radius;
-                    } else {
-                        const pos = typeof element.tooltipPosition === 'function'
-                            ? element.tooltipPosition()
-                            : { x: element.x, y: element.y };
-                        x = pos.x;
-                        y = pos.y - 8;
-                    }
-
-                    ctx.save();
-                    ctx.font = options.font || 'bold 10px Inter, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-
-                    if (options.stroke) {
-                        ctx.lineWidth = options.strokeWidth || 3;
-                        ctx.strokeStyle = options.strokeColor || 'rgba(0,0,0,0.6)';
-                        ctx.strokeText(label, x, y);
-                    }
-
-                    ctx.fillStyle = options.color || '#e2e8f0';
-                    ctx.fillText(label, x, y);
-                    ctx.restore();
-                });
-            });
-        }
-    });
-    window.__biValueLabelsPluginRegistered = true;
-}
 
 const BI = {
     charts: {},
@@ -80,6 +37,105 @@ const BI = {
     currentPeriod: null,
     _viewRole: null,
     _lastKPIs: null,
+    _chartJsPromise: null,
+
+    /**
+     * ✅ NOVO (v9.7): injeta o <script> do Chart.js só na primeira vez
+     * que for realmente necessário (abrir o BI), e reaproveita a mesma
+     * Promise se for chamado de novo enquanto o script ainda está
+     * baixando (evita pedir o arquivo duas vezes em cliques rápidos).
+     */
+    _ensureChartJsLoaded() {
+        if (window.Chart) {
+            this._registerValueLabelsPlugin();
+            return Promise.resolve();
+        }
+
+        if (this._chartJsPromise) return this._chartJsPromise;
+
+        this._chartJsPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
+            script.onload = () => {
+                this._registerValueLabelsPlugin();
+                log('✅ Chart.js carregado (sob demanda)', 'success');
+                resolve();
+            };
+            script.onerror = () => {
+                this._chartJsPromise = null; // permite tentar de novo depois
+                reject(new Error('Falha ao carregar Chart.js'));
+            };
+            document.head.appendChild(script);
+        });
+
+        return this._chartJsPromise;
+    },
+
+    /**
+     * Plugin custom de "data labels" (valores desenhados no próprio
+     * gráfico) — antes ficava solto no topo do arquivo, dependendo de
+     * `Chart` já existir no momento em que bi.js era interpretado. Como
+     * Chart.js agora carrega sob demanda, isso só pode rodar DEPOIS que
+     * o script termina de carregar — daqui a pouco, dentro de
+     * _ensureChartJsLoaded().
+     */
+    _registerValueLabelsPlugin() {
+        if (window.__biValueLabelsPluginRegistered) return;
+
+        Chart.register({
+            id: 'valueLabelsPlugin',
+            afterDatasetsDraw(chart, args, options) {
+                if (!options || options.formatter === false) return;
+                const { ctx } = chart;
+
+                chart.data.datasets.forEach((dataset, dsIndex) => {
+                    const meta = chart.getDatasetMeta(dsIndex);
+                    if (meta.hidden) return;
+
+                    meta.data.forEach((element, index) => {
+                        const value = dataset.data[index];
+                        if (!value) return;
+
+                        const label = typeof options.formatter === 'function'
+                            ? options.formatter(value, dataset, index)
+                            : String(value);
+                        if (!label) return;
+
+                        let x, y;
+                        if (chart.config.type === 'doughnut' || chart.config.type === 'pie') {
+                            const angle = (element.startAngle + element.endAngle) / 2;
+                            const radius = (element.innerRadius + element.outerRadius) / 2;
+                            x = element.x + Math.cos(angle) * radius;
+                            y = element.y + Math.sin(angle) * radius;
+                        } else {
+                            const pos = typeof element.tooltipPosition === 'function'
+                                ? element.tooltipPosition()
+                                : { x: element.x, y: element.y };
+                            x = pos.x;
+                            y = pos.y - 8;
+                        }
+
+                        ctx.save();
+                        ctx.font = options.font || 'bold 10px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+
+                        if (options.stroke) {
+                            ctx.lineWidth = options.strokeWidth || 3;
+                            ctx.strokeStyle = options.strokeColor || 'rgba(0,0,0,0.6)';
+                            ctx.strokeText(label, x, y);
+                        }
+
+                        ctx.fillStyle = options.color || '#e2e8f0';
+                        ctx.fillText(label, x, y);
+                        ctx.restore();
+                    });
+                });
+            }
+        });
+
+        window.__biValueLabelsPluginRegistered = true;
+    },
 
     _formatBRL(value, decimals = 2) {
         if (window.formatBRL) return window.formatBRL(value, decimals);
@@ -96,12 +152,7 @@ const BI = {
     },
 
     /**
-     * ✅ NOVO (v9.5): abre/fecha cada relatório do BI (Curva ABC,
-     * Estoque Crítico, Giro de Estoque, Ranking de Vendedores,
-     * Detalhamento) individualmente — em vez de tudo aberto o tempo
-     * todo, obrigando a pessoa a rolar a tela inteira pra achar um
-     * relatório específico. Fecham por padrão; "Custo vs. Lucro" já
-     * abre aberto por ser compacto.
+     * ✅ v9.5: abre/fecha cada relatório do BI individualmente.
      */
     toggleSection(key) {
         const content = document.getElementById(`sec-${key}-content`);
@@ -121,6 +172,10 @@ const BI = {
                 log('❌ Acesso negado ao BI', 'error');
                 return;
             }
+
+            // ✅ v9.7 PERFORMANCE: só baixa o Chart.js na hora que a
+            // pessoa realmente abre o BI — não mais pra todo visitante.
+            await this._ensureChartJsLoaded();
 
             this._viewRole = window.APP.auth.role;
             this._updateHeaderForRole();
@@ -143,8 +198,40 @@ const BI = {
 
         } catch (err) {
             log(`❌ Erro ao carregar BI: ${err.message}`, 'error');
-            if (token === this._loadToken) this.renderMockCharts();
+            // Se o próprio Chart.js falhou ao carregar (rede fora do
+            // ar, por exemplo), não faz sentido tentar desenhar os
+            // gráficos mock — só o resto do BI (KPIs, listas) funciona.
+            if (token === this._loadToken && window.Chart) this.renderMockCharts();
         }
+    },
+
+    /**
+     * ✅ NOVO (v9.6): busca as linhas de order_vendor_payments pros
+     * pedidos informados, numa única consulta (evita 1 consulta por
+     * pedido). Se a tabela ainda não existir no banco (migração não
+     * aplicada), falha silenciosamente e devolve mapa vazio — o
+     * sistema cai no modelo antigo automaticamente.
+     */
+    async _fetchVendorPaymentsMap(orderIds) {
+        const map = {};
+        if (!orderIds.length) return map;
+
+        try {
+            const { data, error } = await _supabase
+                .from('order_vendor_payments')
+                .select('id, order_id, vendor_id, amount, payment_proof_url, payment_confirmed, payment_confirmed_at, profiles!vendor_id(full_name)')
+                .in('order_id', orderIds);
+
+            if (error) throw error;
+
+            (data || []).forEach(row => {
+                (map[row.order_id] = map[row.order_id] || []).push(row);
+            });
+        } catch (err) {
+            log(`⚠️ order_vendor_payments indisponível (modelo antigo em uso): ${err.message}`, 'warning');
+        }
+
+        return map;
     },
 
     async _fetchAdminOrders() {
@@ -173,7 +260,15 @@ const BI = {
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data;
+
+        const orders = data || [];
+
+        // ✅ NOVO (v9.6): anexa a lista de pagamentos por vendedor de
+        // cada pedido (pode ter mais de um vendedor por pedido).
+        const vpMap = await this._fetchVendorPaymentsMap(orders.map(o => o.id));
+        orders.forEach(o => { o.vendor_payments = vpMap[o.id] || []; });
+
+        return orders;
     },
 
     async _fetchSellerOrders() {
@@ -208,11 +303,6 @@ const BI = {
                     payment_method: item.orders?.payment_method || null,
                     payment_proof_url: item.orders?.payment_proof_url || null,
                     payment_confirmed: !!item.orders?.payment_confirmed,
-                    // ✅ FIX: faltavam esses dois campos — sem eles, o
-                    // vendedor (diferente do Admin Supremo) nunca via o
-                    // selo "⌛ Expirou" nem a contagem "⏳ Expira em Xmin",
-                    // e pedidos expirados continuavam contando errado no
-                    // faturamento/lucro do próprio painel do vendedor.
                     status: item.orders?.status || 'pending',
                     expires_at: item.orders?.expires_at || null,
                     total_amount: 0,
@@ -231,9 +321,21 @@ const BI = {
             });
         });
 
-        return Object.values(grouped).sort(
+        const orders = Object.values(grouped).sort(
             (a, b) => new Date(b.created_at) - new Date(a.created_at)
         );
+
+        // ✅ NOVO (v9.6): anexa a PRÓPRIA fatia de pagamento do vendedor
+        // (uma única linha por pedido, já que aqui só vemos os próprios
+        // produtos) — se não existir linha (pedido de antes da migração),
+        // vendor_payment fica null e o card cai no modelo antigo.
+        const vpMap = await this._fetchVendorPaymentsMap(orders.map(o => o.id));
+        orders.forEach(o => {
+            const rows = vpMap[o.id] || [];
+            o.vendor_payment = rows.find(r => r.vendor_id === sellerId) || null;
+        });
+
+        return orders;
     },
 
     _updateHeaderForRole() {
@@ -438,13 +540,8 @@ const BI = {
     },
 
     /**
-     * ✅ v9.4: substitui o Resumo Executivo (texto) + DRE (tabela), que
-     * eram REDUNDANTES entre si e com os cartões de KPI — os três
-     * mostravam exatamente os mesmos 2 números (faturamento e lucro),
-     * só em formatos diferentes. Uma barra visual mostra a MESMA conta
-     * de um jeito que os cartões não mostram (proporção visual, de
-     * relance) e adiciona uma leitura de saúde da margem que nenhum dos
-     * outros dois painéis tinha.
+     * ✅ v9.4: barra visual de Custo vs Lucro, substitui Resumo
+     * Executivo + DRE (redundantes com os cartões de KPI).
      */
     renderMarginBar(orders, costFallback = null) {
         const el = document.getElementById('bi-margin-bar');
@@ -501,6 +598,108 @@ const BI = {
         return `https://wa.me/${withCountry}`;
     },
 
+    /**
+     * ✅ NOVO (v9.6): monta o bloco de status/comprovante/confirmação de
+     * pagamento de UM pedido, já ciente de quem está olhando (vendedor
+     * vê só a própria fatia; Admin Supremo vê a fatia de cada vendedor).
+     * Se o pedido não tiver linha em order_vendor_payments (criado antes
+     * da migração), cai no modelo antigo — um status só, confirmável
+     * apenas pelo Admin Supremo.
+     */
+    _renderPaymentSection(order) {
+        const esc = window.escapeHtml || ((s) => s);
+
+        // ── VENDEDOR: só a própria fatia ──────────────────────────
+        if (this._viewRole === 'seller') {
+            const vp = order.vendor_payment;
+
+            if (vp) {
+                const isPaid = !!vp.payment_confirmed;
+                const statusBadge = isPaid ? `
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago (sua parte)</span>
+                ` : order.status === 'expired' ? `
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-slate-600/30 text-slate-400 uppercase">⌛ Expirou (estoque devolvido)</span>
+                ` : `
+                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Aguardando seu comprovante</span>
+                `;
+                const proofLink = vp.payment_proof_url ? `
+                    <a href="${vp.payment_proof_url}" target="_blank" rel="noopener" class="text-[10px] font-black px-2 py-1 rounded-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 uppercase transition-all">
+                        📎 Ver Comprovante
+                    </a>
+                ` : '';
+                const confirmBtn = !isPaid ? `
+                    <button onclick="window.APP.bi.confirmVendorPayment('${order.id}', '${vp.vendor_id}')" class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 hover:bg-green-600/30 text-green-400 uppercase transition-all">
+                        ✔ Confirmar Recebimento
+                    </button>
+                ` : '';
+
+                return `${statusBadge}${proofLink}${confirmBtn}`;
+            }
+
+            // Sem linha própria — pedido de antes da migração. Fica só
+            // com o selo informativo (a confirmação continua sendo do
+            // Admin Supremo pra esses pedidos antigos).
+            const isPaidLegacy = !!order.payment_confirmed;
+            return isPaidLegacy ? `
+                <span class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago</span>
+            ` : `
+                <span class="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Aguardando pagamento</span>
+            `;
+        }
+
+        // ── ADMIN SUPREMO: fatia de cada vendedor ─────────────────
+        const vps = order.vendor_payments || [];
+
+        if (vps.length) {
+            const rows = vps.map(vp => {
+                const vendorName = esc(vp.profiles?.full_name || 'Vendedor');
+                const isPaid = !!vp.payment_confirmed;
+                const badge = isPaid
+                    ? `<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago</span>`
+                    : `<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Pendente</span>`;
+                const proofLink = vp.payment_proof_url ? `
+                    <a href="${vp.payment_proof_url}" target="_blank" rel="noopener" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 uppercase transition-all">📎</a>
+                ` : '';
+                const confirmBtn = !isPaid ? `
+                    <button onclick="window.APP.bi.confirmVendorPayment('${order.id}', '${vp.vendor_id}')" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-600/20 hover:bg-green-600/30 text-green-400 uppercase transition-all">
+                        ✔ Confirmar
+                    </button>
+                ` : '';
+
+                return `
+                    <div class="flex justify-between items-center gap-2 bg-black/20 px-2 py-1.5 rounded-lg">
+                        <span class="text-[11px] text-slate-300 font-bold truncate">👤 ${vendorName} · R$ ${this._formatBRL(vp.amount)}</span>
+                        <div class="flex items-center gap-1 flex-shrink-0">${badge}${proofLink}${confirmBtn}</div>
+                    </div>
+                `;
+            }).join('');
+
+            return `<div class="w-full space-y-1 mt-1">${rows}</div>`;
+        }
+
+        // Sem nenhuma linha — pedido de antes da migração, modelo antigo.
+        const isPaidLegacy = !!order.payment_confirmed;
+        const statusBadge = isPaidLegacy ? `
+            <span class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago</span>
+        ` : order.status === 'expired' ? `
+            <span class="text-[10px] font-black px-2 py-1 rounded-full bg-slate-600/30 text-slate-400 uppercase">⌛ Expirou (estoque devolvido)</span>
+        ` : `
+            <span class="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Aguardando pagamento</span>
+        `;
+        const proofLink = order.payment_proof_url ? `
+            <a href="${order.payment_proof_url}" target="_blank" rel="noopener" class="text-[10px] font-black px-2 py-1 rounded-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 uppercase transition-all">
+                📎 Ver Comprovante
+            </a>
+        ` : '';
+        const confirmBtn = !isPaidLegacy ? `
+            <button onclick="window.APP.bi.confirmPayment('${order.id}')" class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 hover:bg-green-600/30 text-green-400 uppercase transition-all">
+                ✔ Confirmar Pagamento
+            </button>
+        ` : '';
+
+        return `${statusBadge}${proofLink}${confirmBtn}`;
+    },
+
     renderOrderList(orders) {
         try {
             const list = document.getElementById('bi-orders-detail');
@@ -512,7 +711,6 @@ const BI = {
             }
 
             const canDelete = this._viewRole === 'supreme';
-            const canConfirmPayment = this._viewRole === 'supreme';
 
             // ✅ FIX SEGURANÇA: nome/telefone do cliente vêm do checkout,
             // que qualquer pessoa preenche SEM precisar de conta — e o
@@ -532,28 +730,24 @@ const BI = {
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
                 });
 
-                const isPaid = !!order.payment_confirmed;
                 const paymentBadge = order.payment_method ? `
                     <span class="text-[10px] font-black px-2 py-1 rounded-full bg-white/10 text-slate-300 uppercase">${order.payment_method}</span>
                 ` : '';
-                // ✅ NOVO: pedido expirado (2h sem comprovante, estoque já
-                // devolvido sozinho) ganha selo próprio — não fica mais
-                // com a cara de "Aguardando pagamento" pra sempre.
-                const statusBadge = isPaid ? `
-                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 text-green-400 uppercase">✔ Pago</span>
-                ` : order.status === 'expired' ? `
-                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-slate-600/30 text-slate-400 uppercase">⌛ Expirou (estoque devolvido)</span>
-                ` : `
-                    <span class="text-[10px] font-black px-2 py-1 rounded-full bg-yellow-600/20 text-yellow-400 uppercase">Aguardando pagamento</span>
-                `;
-                // ✅ NOVO: enquanto o pedido ainda está pendente (sem
-                // comprovante nem confirmação), mostra quanto tempo falta
-                // pra ele expirar sozinho e devolver o estoque — assim, se
-                // o vendedor checar o painel, ele vê a urgência na hora
-                // (mesmo que tenha perdido o toast em tempo real por estar
-                // com o telefone no silencioso).
+
+                // ✅ v9.6: status/comprovante/confirmação agora vem daqui
+                // (escopado por vendedor quando possível).
+                const paymentSection = this._renderPaymentSection(order);
+
+                // ✅ pedido pendente (sem comprovante nem confirmação)
+                // mostra quanto tempo falta pra expirar sozinho.
+                const isPaidAny = this._viewRole === 'seller'
+                    ? !!(order.vendor_payment ? order.vendor_payment.payment_confirmed : order.payment_confirmed)
+                    : (order.vendor_payments?.length
+                        ? order.vendor_payments.every(v => v.payment_confirmed)
+                        : !!order.payment_confirmed);
+
                 let expiryChip = '';
-                if (!isPaid && order.status === 'pending' && !order.payment_proof_url && order.expires_at) {
+                if (!isPaidAny && order.status === 'pending' && !order.payment_proof_url && order.expires_at) {
                     const diffMs = new Date(order.expires_at).getTime() - Date.now();
                     if (diffMs > 0) {
                         const mins = Math.round(diffMs / 60000);
@@ -566,16 +760,6 @@ const BI = {
                         `;
                     }
                 }
-                const proofLink = order.payment_proof_url ? `
-                    <a href="${order.payment_proof_url}" target="_blank" rel="noopener" class="text-[10px] font-black px-2 py-1 rounded-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 uppercase transition-all">
-                        📎 Ver Comprovante
-                    </a>
-                ` : '';
-                const confirmBtn = (canConfirmPayment && !isPaid) ? `
-                    <button onclick="window.APP.bi.confirmPayment('${order.id}')" class="text-[10px] font-black px-2 py-1 rounded-full bg-green-600/20 hover:bg-green-600/30 text-green-400 uppercase transition-all">
-                        ✔ Confirmar Pagamento
-                    </button>
-                ` : '';
 
                 return `
                     <div class="flex justify-between items-start bg-white/5 p-4 rounded-xl border border-white/5">
@@ -590,7 +774,7 @@ const BI = {
                             ` : ''}
                             <div class="text-[11px] text-blue-300/80 mt-2 leading-relaxed break-words">${itemsText}</div>
                             <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                                ${paymentBadge}${statusBadge}${expiryChip}${proofLink}${confirmBtn}
+                                ${paymentBadge}${expiryChip}${paymentSection}
                             </div>
                             <div class="text-[10px] text-slate-600 mt-1">${dataHora}</div>
                         </div>
@@ -1133,9 +1317,6 @@ const BI = {
         el.innerHTML = labels.map((name, i) => {
             const value = data[i];
             const pct = totalUnidades > 0 ? ((value / totalUnidades) * 100).toFixed(0) : 0;
-            // ✅ FIX SEGURANÇA: antes só escapava aspas (pro atributo title),
-            // deixando `<`/`>` livres no texto visível da legenda — agora
-            // usa escapeHtml() completo em ambos os lugares.
             const safeName = window.escapeHtml ? window.escapeHtml(name) : name;
             return `
                 <div class="legend-item">
@@ -1173,6 +1354,43 @@ const BI = {
         return nameMap;
     },
 
+    /**
+     * ✅ NOVO (v9.6): confirma a fatia de UM vendedor específico dentro
+     * de um pedido — chama a RPC confirm_vendor_payment(), que só deixa
+     * o próprio vendedor (auth.uid() = vendorId) ou o Admin Supremo
+     * confirmarem (o banco garante isso, essa checagem aqui é só a
+     * primeira camada / UX).
+     */
+    async confirmVendorPayment(orderId, vendorId) {
+        const isOwnSlice = vendorId === window.APP?.auth?.userId;
+        if (this._viewRole !== 'supreme' && !isOwnSlice) {
+            alert('❌ Você só pode confirmar o pagamento da sua própria parte do pedido.');
+            return;
+        }
+
+        if (!confirm('Confirmar que esse pagamento foi recebido?')) return;
+
+        try {
+            const { error } = await _supabase.rpc('confirm_vendor_payment', {
+                p_order_id: orderId,
+                p_vendor_id: vendorId
+            });
+
+            if (error) throw error;
+
+            log('✅ Pagamento confirmado (por vendedor)', 'success');
+            await this.loadDashboard();
+        } catch (err) {
+            log(`❌ Erro ao confirmar pagamento: ${err.message}`, 'error');
+            alert(`Erro ao confirmar pagamento: ${err.message}`);
+        }
+    },
+
+    /**
+     * Modelo antigo (mantido pra pedidos de antes da migração de Pix por
+     * vendedor) — um status só pro pedido inteiro, só o Admin Supremo
+     * confirma.
+     */
     async confirmPayment(orderId) {
         if (this._viewRole !== 'supreme') {
             alert('❌ Você não tem permissão para confirmar pagamentos.');

@@ -1,5 +1,5 @@
 /**
- * PRODUCTS.JS v5.0
+ * PRODUCTS.JS v5.1
  * ✅ v4.6: Categorias, filtro por categoria na vitrine
  * ✅ v4.7 (rodada anterior): busca por texto, favoritos (localStorage),
  *    selos de Novidade/Últimas Unidades/Vendidos, chips de categoria
@@ -23,6 +23,20 @@
  *    paginação da vitrine pública. bi.js e notifications.js também
  *    passam a usar essa lista (antes liam `products.products`, que
  *    agora é só a "página atual" da vitrine — ver observação no bi.js).
+ * ✅ v5.1 NOVO: a consulta de perfil do vendedor (já pública, usada pra
+ *    mostrar nome/telefone na vitrine) agora também traz `pix_key` —
+ *    é o que permite ao checkout (orders.js) montar um bloco de Pix
+ *    PRÓPRIO por vendedor, em vez de uma chave única da loja inteira.
+ * ✅ v5.2 NOVO — PERFORMANCE:
+ *    • fetchAll() buscava a vitrine pública e a lista de gestão em
+ *      SÉRIE (uma esperava a outra terminar) — agora rodam em
+ *      PARALELO (Promise.all), já que não dependem uma da outra.
+ *    • Dentro de cada busca, "status online do vendedor" e "galeria de
+ *      mídia" também rodavam em série — agora também em paralelo.
+ *    • Fotos novas de produto passam por window.compressImage()
+ *      (config.js) antes do upload — resolve a lentidão de subir foto
+ *      tirada direto da câmera do celular (que costuma vir com
+ *      8-15MB). Vídeos nunca são comprimidos aqui.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -82,7 +96,7 @@ const Products = {
                 active,
                 created_at,
                 sales_count,
-                profiles!owner_id(id, full_name, email, phone)
+                profiles!owner_id(id, full_name, email, phone, pix_key)
             `)
             .eq('active', true);
     },
@@ -127,8 +141,14 @@ const Products = {
 
             this._page = 0;
             this._hasMore = true;
-            await this._fetchStorefrontPage(true);
-            await this._fetchManageableProducts();
+            // ✅ v5.2 PERFORMANCE: as duas buscas são independentes
+            // (uma preenche `products`, a outra `manageProducts`) —
+            // rodar em paralelo corta esse tempo praticamente pela
+            // metade, em vez de uma esperar a outra terminar.
+            await Promise.all([
+                this._fetchStorefrontPage(true),
+                this._fetchManageableProducts()
+            ]);
 
             log(`✅ Vitrine carregada (${this.products.length} produto(s) na página atual)`, 'success');
             return this.products;
@@ -168,8 +188,13 @@ const Products = {
 
                 this.products = data || [];
                 this._hasMore = false;
-                await this._attachVendorOnlineStatus(this.products);
-                await this._attachMedia(this.products);
+                // ✅ v5.2 PERFORMANCE: consultas independentes (tabelas
+                // diferentes, campos diferentes em cada produto) — sem
+                // motivo pra uma esperar a outra.
+                await Promise.all([
+                    this._attachVendorOnlineStatus(this.products),
+                    this._attachMedia(this.products)
+                ]);
                 this.render();
                 return;
             }
@@ -199,8 +224,11 @@ const Products = {
             this._page++;
             this._hasMore = page.length === this._pageSize;
 
-            await this._attachVendorOnlineStatus(page);
-            await this._attachMedia(page);
+            // ✅ v5.2 PERFORMANCE: idem — em paralelo.
+            await Promise.all([
+                this._attachVendorOnlineStatus(page),
+                this._attachMedia(page)
+            ]);
             this.render();
         } catch (err) {
             log(`❌ Erro ao carregar vitrine: ${err.message}`, 'error');
@@ -230,8 +258,11 @@ const Products = {
             if (error) throw error;
 
             this.manageProducts = data || [];
-            await this._attachVendorOnlineStatus(this.manageProducts);
-            await this._attachMedia(this.manageProducts);
+            // ✅ v5.2 PERFORMANCE: idem — em paralelo.
+            await Promise.all([
+                this._attachVendorOnlineStatus(this.manageProducts),
+                this._attachMedia(this.manageProducts)
+            ]);
 
             this.renderAdmin();
             if (window.APP.auth.role === 'seller') this.renderSeller();
@@ -943,9 +974,19 @@ const Products = {
 
         for (const file of this._mediaState.newFiles) {
             const isVideo = file.type.startsWith('video/');
-            const fileName = `${productId}-${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`;
 
-            const { error: uploadError } = await _supabase.storage.from('product-images').upload(fileName, file);
+            // ✅ v5.2 PERFORMANCE: comprime a foto antes de subir (vídeo
+            // nunca passa por aqui — window.compressImage() já ignora
+            // qualquer arquivo que não seja imagem, mas o check aqui
+            // deixa explícito e evita gastar tempo chamando a função à
+            // toa pra vídeo).
+            const uploadFile = isVideo
+                ? file
+                : await (window.compressImage ? window.compressImage(file) : Promise.resolve(file));
+
+            const fileName = `${productId}-${Date.now()}-${Math.random().toString(36).slice(2)}-${uploadFile.name}`;
+
+            const { error: uploadError } = await _supabase.storage.from('product-images').upload(fileName, uploadFile);
             if (uploadError) { log(`⚠️ Falha ao subir "${file.name}": ${uploadError.message}`, 'warning'); continue; }
 
             const { data: publicUrl } = _supabase.storage.from('product-images').getPublicUrl(fileName);
