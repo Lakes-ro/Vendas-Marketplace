@@ -37,6 +37,12 @@
  *      (config.js) antes do upload — resolve a lentidão de subir foto
  *      tirada direto da câmera do celular (que costuma vir com
  *      8-15MB). Vídeos nunca são comprimidos aqui.
+ * ✅ v5.3 NOVO — PRIMEIRA IMPRESSÃO: enquanto a primeira leva de
+ *    produtos ainda está chegando do banco, a vitrine mostra cartões
+ *    "esqueleto" (efeito de brilho/carregamento) no lugar de produtos
+ *    de verdade — sem isso, quem entra pela primeira vez via internet
+ *    mais lenta via um espaço em branco por alguns segundos, parecendo
+ *    que a página travou.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -138,6 +144,11 @@ const Products = {
             log('📦 Carregando produtos...', 'info');
             this._bindSearch();
             this._bindInfiniteScroll();
+
+            // ✅ v5.3 NOVO: mostra os cartões "esqueleto" IMEDIATAMENTE,
+            // antes mesmo da consulta ao banco começar — a pessoa vê
+            // logo que algo está acontecendo, em vez de tela vazia.
+            this._renderSkeleton();
 
             this._page = 0;
             this._hasMore = true;
@@ -360,6 +371,29 @@ const Products = {
     // RENDER — VITRINE PÚBLICA
     // ============================================================
 
+    /**
+     * ✅ NOVO (v5.3): cartões "esqueleto" — só efeito visual de
+     * carregamento (sem dado nenhum ainda), mostrados por
+     * fetchAll()/filterByCategory()/toggleShowFavorites() enquanto a
+     * consulta de verdade ainda não voltou do banco. render() (chamado
+     * assim que os dados chegam) sobrescreve isso normalmente, já que
+     * ambos escrevem direto em #product-grid.
+     */
+    _renderSkeleton(count = 8) {
+        const grid = document.getElementById('product-grid');
+        if (!grid) return;
+
+        grid.innerHTML = Array.from({ length: count }).map(() => `
+            <div class="skeleton-card" aria-hidden="true">
+                <div class="skeleton-block skeleton-img"></div>
+                <div class="skeleton-block skeleton-line" style="width:40%"></div>
+                <div class="skeleton-block skeleton-line" style="width:80%"></div>
+                <div class="skeleton-block skeleton-line" style="width:55%"></div>
+                <div class="skeleton-block skeleton-line" style="width:100%;height:2.5rem"></div>
+            </div>
+        `).join('');
+    },
+
     render() {
         try {
             const grid = document.getElementById('product-grid');
@@ -572,6 +606,7 @@ const Products = {
         this.showFavoritesOnly = false;
         this._page = 0;
         this._hasMore = true;
+        this._renderSkeleton();
         this._fetchStorefrontPage(true);
     },
 
@@ -579,6 +614,7 @@ const Products = {
         this.showFavoritesOnly = !this.showFavoritesOnly;
         this._page = 0;
         this._hasMore = true;
+        this._renderSkeleton();
         this._fetchStorefrontPage(true);
     },
 

@@ -68,7 +68,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
 
     <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
          (26KB), gerado escaneando todo o projeto — no lugar do script
@@ -107,6 +107,16 @@
     </style>
 </head>
 <body class="bg-[#0b0f1a] text-slate-200 flex min-h-screen font-sans overflow-x-hidden">
+
+    <!-- ✅ NOVO: TELA DE CARREGAMENTO INICIAL — primeira coisa que
+         aparece na tela, antes de qualquer script terminar de rodar.
+         app.js some com ela sozinho quando o APP.init() termina (ou,
+         no pior caso, depois de 8s de segurança — nunca fica travada
+         na tela pra sempre). -->
+    <div id="app-boot-splash">
+        <div class="boot-splash-spinner" aria-hidden="true"></div>
+        <div class="boot-splash-text">Carregando Ityrapuã Store…</div>
+    </div>
 
     <button id="theme-toggle-btn" aria-label="Alternar modo claro/escuro" title="Alternar modo claro/escuro">
     <i data-lucide="sun" id="theme-toggle-icon-sun" class="hidden"></i>
@@ -1055,13 +1065,13 @@
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
          ======================================== -->
-    <script defer src="config.js?v=4"></script>
+    <script defer src="config.js?v=5"></script>
     <script defer src="storage.js?v=2"></script>
     <script defer src="wrapper.js?v=1"></script>
     <script defer src="auth.js?v=8"></script>
     <script defer src="store-status.js?v=2"></script>
     <script defer src="cart.js?v=2"></script>
-    <script defer src="products.js?v=9"></script>
+    <script defer src="products.js?v=10"></script>
     <script defer src="ads.js?v=7"></script>
     <script defer src="bi.js?v=11"></script>
     <script defer src="navigation.js?v=3"></script>
@@ -1075,7 +1085,7 @@
          "pwa-install.js" que estava aqui não bate com nenhum arquivo,
          o que causaria um 404 silencioso. -->
     <script defer src="pwa.js?v=2"></script>
-    <script defer src="app.js?v=4"></script>
+    <script defer src="app.js?v=5"></script>
     <script defer src="theme-toggle.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->

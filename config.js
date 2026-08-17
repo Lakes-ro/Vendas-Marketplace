@@ -8,15 +8,16 @@
  *    tela.
  * ✅ v4.6 NOVO — PERFORMANCE: window.compressImage() — comprime fotos
  *    no PRÓPRIO NAVEGADOR (usando <canvas>, sem depender de nenhuma
- *    biblioteca externa) antes de subir pro Supabase. Fotos tiradas
- *    direto da câmera do celular costumam vir com 8-15MB — sem isso,
- *    cada uma ia inteira pro servidor, tornando o cadastro de produto
- *    (e de anúncio) extremamente lento em conexão de internet comum.
- *    Redimensiona pro máximo de 1600px no lado maior e comprime como
- *    JPEG (qualidade 0.75) — na prática costuma reduzir o arquivo em
- *    80-95%, sem perda visível de qualidade em tela de celular/produto.
- *    Usado em products.js (fotos de produto) e ads.js (banner com
- *    imagem). Vídeos e GIFs NUNCA passam por aqui (ver a função).
+ *    biblioteca externa) antes de subir pro Supabase.
+ * ✅ v4.7 NOVO — PRIMEIRA IMPRESSÃO: se o Supabase JS demorar/falhar
+ *    pra carregar do CDN (rede lenta, bloqueador de anúncio agressivo,
+ *    etc.), o sistema agora tenta de novo sozinho por conta própria
+ *    (5 tentativas, meio segundo entre cada uma) ANTES de incomodar a
+ *    pessoa — cobre o caso comum de "o CDN só demorou um pouquinho
+ *    mais". Só depois de esgotar as tentativas é que aparece um aviso,
+ *    e mesmo assim um aviso DISCRETO (uma faixa no topo, com botão de
+ *    tentar de novo) — não mais um alert() nativo do navegador, que
+ *    trava a tela inteira e passa a impressão de que o site quebrou.
  */
 
 if (typeof window.CONFIG_LOADED !== 'undefined') {
@@ -240,22 +241,64 @@ if (typeof window.CONFIG_LOADED !== 'undefined') {
         }
     }
 
+    /**
+     * ✅ NOVO (v4.7): faixa discreta no topo da tela — substitui o
+     * antigo alert() nativo, que travava a página inteira e dava a
+     * impressão de que o site tinha quebrado. Só aparece depois de
+     * esgotar as tentativas automáticas de reconexão.
+     */
+    function showConnectionErrorBanner() {
+        if (document.getElementById('supabase-error-banner')) return;
+
+        const banner = document.createElement('div');
+        banner.id = 'supabase-error-banner';
+        banner.style.cssText = [
+            'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:99999',
+            'background:#ef4444', 'color:#fff', 'padding:12px 16px',
+            'text-align:center', 'font-weight:700', 'font-size:13px',
+            'font-family:Inter,-apple-system,sans-serif',
+            'box-shadow:0 4px 14px rgba(0,0,0,0.3)'
+        ].join(';');
+        banner.innerHTML = `
+            ⚠️ Não conseguimos conectar ao servidor agora.
+            <button id="supabase-error-retry-btn" style="margin-left:10px;text-decoration:underline;background:none;border:none;color:#fff;font-weight:900;cursor:pointer;font-size:13px;">
+                Tentar novamente
+            </button>
+        `;
+        document.body.appendChild(banner);
+
+        document.getElementById('supabase-error-retry-btn')?.addEventListener('click', () => {
+            location.reload();
+        });
+    }
+
+    /**
+     * ✅ NOVO (v4.7): tenta inicializar o Supabase várias vezes antes
+     * de desistir — cobre o caso (bem comum) de o script do CDN só ter
+     * demorado um pouco mais pra carregar, sem precisar incomodar
+     * ninguém com aviso nenhum.
+     */
+    function tryInitWithRetry(attemptsLeft = 5, delayMs = 600) {
+        const success = initSupabase();
+        if (success) return;
+
+        if (attemptsLeft > 0) {
+            setTimeout(() => tryInitWithRetry(attemptsLeft - 1, delayMs), delayMs);
+            return;
+        }
+
+        window.log('❌ Esgotadas as tentativas de conexão com o Supabase', 'error');
+        showConnectionErrorBanner();
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             window.log('📄 DOM carregado, inicializando Supabase...', 'info');
-            const success = initSupabase();
-            
-            if (!success) {
-                alert('⚠️ Erro ao conectar com o banco. Recarregue a página.');
-            }
+            tryInitWithRetry();
         });
     } else {
         window.log('📄 DOM já estava pronto, inicializando Supabase agora...', 'info');
-        const success = initSupabase();
-        
-        if (!success) {
-            alert('⚠️ Erro ao conectar com o banco. Recarregue a página.');
-        }
+        tryInitWithRetry();
     }
 
     setTimeout(() => {

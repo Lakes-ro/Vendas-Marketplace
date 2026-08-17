@@ -14,7 +14,7 @@
  *    em todos os aparelhos que já tinham o Service Worker instalado.
  */
 
-const CACHE_VERSION = 'marketplace-v5.1';
+const CACHE_VERSION = 'marketplace-v5.2';
 const CACHE_NAME = CACHE_VERSION;
 
 const ASSETS_TO_CACHE = [
