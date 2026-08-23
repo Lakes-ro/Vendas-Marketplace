@@ -1,5 +1,5 @@
 /**
- * VENDOR-SETTINGS.JS v3.3
+ * VENDOR-SETTINGS.JS v3.4
  * ✅ Status da loja (online/offline) via Supabase, com horário automático
  *    aplicado no servidor (pg_cron) — client só relê e reflete
  * ✅ "Fechar a Loja Inteira" — botão de emergência que só o Admin Supremo
@@ -9,6 +9,13 @@
  *    manualmente. Protegido no banco: só quem tem role='supreme' e a
  *    permissão concedida consegue chamar as funções que ligam/desligam
  *    esse modo.
+ * ✅ v3.4 NOVO — FIX CRÍTICO DE PERFORMANCE: init() rodava pra QUALQUER
+ *    conta logada, inclusive Cliente comum — que nem tem acesso a essa
+ *    tela. Isso fazia loadStatus() criar (silenciosamente) uma linha em
+ *    vendor_status pra cada cliente que só compra, e ainda gastava 3
+ *    idas ao banco em SÉRIE (status, histórico, chave Pix) à toa.
+ *    Agora só roda pra quem realmente usa essa tela (seller/supreme), e
+ *    as 3 buscas passam a rodar em paralelo (init() e refresh()).
  * ✅ v3.2 FIX CRÍTICO: removido um bloco de código duplicado que tinha
  *    sido colado por engano depois do fechamento do objeto (um
  *    "async refresh() {...}" solto, fora de qualquer objeto). Isso
@@ -43,11 +50,25 @@ const VendorSettings = {
     // ✅ NOVO (v3.3): chave Pix do próprio vendedor
     pixKey: '',
 
+    /**
+     * ✅ FIX CRÍTICO v3.4: rodava pra QUALQUER conta logada, inclusive
+     * Cliente comum — que nem tem acesso a essa tela. Isso fazia
+     * loadStatus() criar (silenciosamente) uma linha em vendor_status
+     * pra cada cliente que só compra, e ainda gastava 3 idas ao banco
+     * em SÉRIE (status, depois histórico, depois chave Pix) à toa.
+     * Agora só roda pra quem realmente usa essa tela (seller/supreme),
+     * e as 3 buscas passam a rodar em paralelo.
+     */
     async init() {
         try {
-            await this.loadStatus();
-            await this.loadHistory();
-            await this.loadPixKey();
+            const role = window.APP?.auth?.role;
+            if (role !== 'seller' && role !== 'supreme') return;
+
+            await Promise.all([
+                this.loadStatus(),
+                this.loadHistory(),
+                this.loadPixKey()
+            ]);
             this.render();
             this.attachListeners();
             this._startAutoRefresh();
@@ -64,9 +85,11 @@ const VendorSettings = {
      * só recarrega dados e re-renderiza, sem duplicar listeners/intervalos
      */
     async refresh() {
-        await this.loadStatus();
-        await this.loadHistory();
-        await this.loadPixKey();
+        await Promise.all([
+            this.loadStatus(),
+            this.loadHistory(),
+            this.loadPixKey()
+        ]);
         this.render();
 
         // Recarrega o painel de emergência toda vez que a aba abre

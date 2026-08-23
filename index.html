@@ -65,10 +65,20 @@
          Inter no corpo (leitura confortável) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- ✅ NOVO (v5.6) PERFORMANCE: adianta a conexão (DNS + TLS) com os
+         CDNs externos que o sistema usa, antes mesmo do <script> que os
+         carrega ser encontrado — em conexão de celular, cada uma dessas
+         etapas costuma custar 100-300ms, e adiantar isso em paralelo
+         com o resto do carregamento da página economiza esse tempo de
+         verdade quando o download realmente começa. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=9">
 
     <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
          (26KB), gerado escaneando todo o projeto — no lugar do script
@@ -88,8 +98,15 @@
     <!-- SUPABASE JS -->
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- LUCIDE ICONS -->
-    <script defer src="https://unpkg.com/lucide@latest"></script>
+    <!-- ✅ PERFORMANCE (v5.6): o Lucide (ícones) saiu daqui — carregar
+         ele bem no topo, antes de config.js e de todo o resto, fazia
+         TUDO esperar o Lucide baixar primeiro (scripts com "defer"
+         executam na ordem em que aparecem no HTML). Como nenhum script
+         local realmente PRECISA do Lucide pronto na hora — todo lugar
+         que usa ícone já checa "if (window.lucide)" antes de chamar —
+         ele foi movido pro fim da lista de scripts, logo antes de
+         app.js. Assim ele baixa em paralelo enquanto o resto do app já
+         está rodando, e só atualiza os ícones quando terminar. -->
 
     <style>
         #ad-form-text textarea { font-family: 'Inter', sans-serif; }
@@ -117,6 +134,23 @@
         <div class="boot-splash-spinner" aria-hidden="true"></div>
         <div class="boot-splash-text">Carregando Ityrapuã Store…</div>
     </div>
+
+    <script>
+        // ✅ REDE DE SEGURANÇA INDEPENDENTE: some com a splash sozinha
+        // depois de 6s, MESMO que app.js falhe em carregar por completo
+        // (404, erro de sintaxe, cache antigo do Service Worker, etc.).
+        // Fica direto aqui no HTML de propósito — se essa garantia
+        // morasse dentro de app.js, e fosse justamente o app.js que
+        // falhasse, a garantia nunca existiria de verdade.
+        setTimeout(function () {
+            var el = document.getElementById('app-boot-splash');
+            if (el && el.dataset.hidden !== '1') {
+                el.dataset.hidden = '1';
+                el.classList.add('boot-splash-hide');
+                setTimeout(function () { el.remove(); }, 400);
+            }
+        }, 6000);
+    </script>
 
     <button id="theme-toggle-btn" aria-label="Alternar modo claro/escuro" title="Alternar modo claro/escuro">
     <i data-lucide="sun" id="theme-toggle-icon-sun" class="hidden"></i>
@@ -314,7 +348,15 @@
 
             <h2 class="text-3xl font-black mb-1">Marketplace</h2>
             <p class="market-subtitle">Feito por quem mora aqui, pra quem mora aqui — novidades toda semana 👇</p>
-            <div id="category-filter-bar" class="flex flex-wrap gap-2 mb-6"></div>
+            <div id="category-filter-wrap" class="category-filter-wrap mb-6">
+                <button id="category-scroll-left" class="category-scroll-btn category-scroll-btn-left is-hidden" aria-label="Ver categorias anteriores" onclick="window.APP.products.scrollCategoryBar(-1)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <div id="category-filter-bar" class="category-filter-bar"></div>
+                <button id="category-scroll-right" class="category-scroll-btn category-scroll-btn-right" aria-label="Ver mais categorias" onclick="window.APP.products.scrollCategoryBar(1)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
             <div id="product-grid" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
         </section>
 
@@ -528,6 +570,18 @@
         <!-- ===== ADMIN PANEL ===== -->
         <section id="admin-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-red-500">ADMIN PANEL</h2>
+
+            <div class="bg-slate-900/50 p-6 rounded-2xl border border-orange-500/20 mb-6">
+                <h3 class="text-lg font-black text-orange-400 mb-2">🗜️ Otimização de Imagens Antigas</h3>
+                <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                    Fotos de produto e de anúncio cadastradas <strong class="text-slate-300">antes</strong> da compressão automática existir continuam no tamanho original (às vezes 8-15MB, direto da câmera) — são elas que deixam a vitrine e o banner lentos pra carregar. Rode isso uma vez pra comprimir tudo que já está publicado. Pode rodar de novo sem problema: o que já estiver leve é pulado sozinho.
+                </p>
+                <button id="image-optimizer-btn" onclick="window.ImageOptimizer.runAll()" class="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg transition-all mb-3">
+                    🗜️ Otimizar Imagens Antigas
+                </button>
+                <div id="image-optimizer-log" class="bg-black/30 rounded-lg p-3 text-[11px] font-mono text-slate-400 max-h-40 overflow-y-auto space-y-1"></div>
+            </div>
+
             <button class="mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 px-6 rounded-2xl transition-all" data-action="open-product-modal">
                 ➕ NOVO PRODUTO
             </button>
@@ -1071,21 +1125,26 @@
     <script defer src="auth.js?v=8"></script>
     <script defer src="store-status.js?v=2"></script>
     <script defer src="cart.js?v=2"></script>
-    <script defer src="products.js?v=10"></script>
-    <script defer src="ads.js?v=7"></script>
+    <script defer src="products.js?v=13"></script>
+    <script defer src="ads.js?v=8"></script>
+    <script defer src="image-optimizer.js?v=1"></script>
     <script defer src="bi.js?v=11"></script>
     <script defer src="navigation.js?v=3"></script>
     <script defer src="tenants.js?v=6"></script>
     <script defer src="orders.js?v=6"></script>
     <script defer src="order-management.js?v=2"></script>
     <script defer src="admin-warnings.js?v=2"></script>
-    <script defer src="vendor-settings.js?v=5"></script>
+    <script defer src="vendor-settings.js?v=6"></script>
     <script defer src="notifications.js?v=1"></script>
     <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
          "pwa-install.js" que estava aqui não bate com nenhum arquivo,
          o que causaria um 404 silencioso. -->
     <script defer src="pwa.js?v=2"></script>
-    <script defer src="app.js?v=5"></script>
+
+    <!-- ✅ LUCIDE ICONS — movido pro fim de propósito (ver nota no <head>) -->
+    <script defer src="https://unpkg.com/lucide@latest"></script>
+
+    <script defer src="app.js?v=7"></script>
     <script defer src="theme-toggle.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->

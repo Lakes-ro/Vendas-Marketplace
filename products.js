@@ -43,6 +43,31 @@
  *    de verdade — sem isso, quem entra pela primeira vez via internet
  *    mais lenta via um espaço em branco por alguns segundos, parecendo
  *    que a página travou.
+ * ✅ v5.4 NOVO — PERFORMANCE CRÍTICA: fetchAll() foi dividido em dois
+ *    métodos independentes — fetchStorefront() (a vitrine pública, que
+ *    NÃO depende de login nem de cargo/role) e fetchManageable() (a
+ *    lista de Admin/Estoque, que só faz sentido depois de saber quem
+ *    está logado).
+ * ✅ v5.5 NOVO:
+ *    • FIX: o botão de favoritar (❤️) dependia do Lucide desenhar o
+ *      ícone via JS depois do HTML já estar na tela — se isso demorasse
+ *      um pouco (ou falhasse), o botão ficava com o círculo vazio, sem
+ *      coração dentro. Trocado por um SVG desenhado direto no próprio
+ *      HTML — nunca mais depende de nada carregar depois.
+ *    • NOVO: setas de navegação na barra de categorias (◀ ▶), visíveis
+ *      só em quem usa mouse/trackpad — no toque (celular/tablet) o
+ *      gesto de arrastar já resolve, então elas ficam escondidas lá.
+ * ✅ v5.6 NOVO — FIX CRÍTICO DE PERFORMANCE: _fetchManageableProducts()
+ *    só filtrava por owner_id quando role === 'seller'. Pra role ===
+ *    'client' (COMPRADOR COMUM logado, o tipo de conta mais comum do
+ *    sistema), a condição não batia e a busca ficava SEM FILTRO NENHUM
+ *    — ou seja, todo cliente logado baixava o CATÁLOGO INTEIRO da loja
+ *    escondido, sem paginação, sem servir pra nada na tela dele (ele
+ *    nem acessa as abas Admin/Estoque). Isso rodava a cada login,
+ *    crescendo junto com o catálogo — provável maior causa isolada de
+ *    lentidão pra quem só compra. Agora só busca essa lista pra quem
+ *    realmente precisa (seller ou supreme); cliente comum nem dispara
+ *    a consulta.
  */
 
 const PRODUCT_PLACEHOLDER = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='160' viewBox='0 0 200 160'%3E%3Crect width='200' height='160' fill='%231e293b'/%3E%3Crect x='70' y='45' width='60' height='50' rx='6' fill='%23334155'/%3E%3Ccircle cx='100' cy='115' r='8' fill='%23334155'/%3E%3Ctext x='100' y='145' text-anchor='middle' font-size='11' fill='%2364748b' font-family='sans-serif'%3ESem imagem%3C/text%3E%3C/svg%3E`;
@@ -142,23 +167,14 @@ const Products = {
     async fetchAll() {
         try {
             log('📦 Carregando produtos...', 'info');
-            this._bindSearch();
-            this._bindInfiniteScroll();
 
-            // ✅ v5.3 NOVO: mostra os cartões "esqueleto" IMEDIATAMENTE,
-            // antes mesmo da consulta ao banco começar — a pessoa vê
-            // logo que algo está acontecendo, em vez de tela vazia.
-            this._renderSkeleton();
-
-            this._page = 0;
-            this._hasMore = true;
-            // ✅ v5.2 PERFORMANCE: as duas buscas são independentes
-            // (uma preenche `products`, a outra `manageProducts`) —
+            // ✅ v5.4 PERFORMANCE: as duas metades são independentes —
             // rodar em paralelo corta esse tempo praticamente pela
-            // metade, em vez de uma esperar a outra terminar.
+            // metade quando fetchAll() é chamado direto (ex: depois de
+            // finalizar uma compra, ou trocar status do vendedor).
             await Promise.all([
-                this._fetchStorefrontPage(true),
-                this._fetchManageableProducts()
+                this.fetchStorefront(),
+                this.fetchManageable()
             ]);
 
             log(`✅ Vitrine carregada (${this.products.length} produto(s) na página atual)`, 'success');
@@ -167,6 +183,31 @@ const Products = {
             log(`❌ Erro ao carregar produtos: ${err.message}`, 'error');
             return [];
         }
+    },
+
+    /**
+     * ✅ NOVO (v5.4): só a VITRINE PÚBLICA — não depende de login nem
+     * de cargo/role nenhum, então pode (e deve) começar imediatamente,
+     * sem esperar Auth.init() terminar. Chamada direto por app.js logo
+     * no início do boot, em paralelo com o Auth.
+     */
+    async fetchStorefront() {
+        this._bindSearch();
+        this._bindInfiniteScroll();
+        this._renderSkeleton();
+
+        this._page = 0;
+        this._hasMore = true;
+        await this._fetchStorefrontPage(true);
+    },
+
+    /**
+     * ✅ NOVO (v5.4): só a lista de gestão (Admin/Estoque) — essa sim
+     * depende de saber quem está logado (role/userId), então só faz
+     * sentido chamar DEPOIS que Auth.init() já terminou.
+     */
+    async fetchManageable() {
+        await this._fetchManageableProducts();
     },
 
     /**
@@ -255,13 +296,30 @@ const Products = {
      * Não sofre com o problema de escala da vitrine pública porque o
      * catálogo de UM vendedor (ou o painel interno do Admin) continua
      * naturalmente pequeno mesmo se a vitrine pública crescer bastante.
+     * ✅ FIX CRÍTICO v5.6: o filtro por owner_id só era aplicado quando
+     * role === 'seller'. Pra role === 'client' (COMPRADOR COMUM
+     * logado — o tipo de conta mais comum do sistema), a condição não
+     * batia e a busca ficava SEM FILTRO NENHUM — ou seja, todo cliente
+     * logado baixava o CATÁLOGO INTEIRO da loja escondido, sem
+     * paginação, sem servir pra absolutamente nada na tela dele (ele
+     * nem tem acesso às abas Admin/Estoque). Isso rodava silenciosamente
+     * a cada login, e crescia junto com o catálogo — provavelmente a
+     * maior causa isolada de lentidão pra quem compra. Agora só busca
+     * essa lista pra quem realmente PRECISA dela (seller ou supreme);
+     * cliente comum nem dispara a consulta.
      */
     async _fetchManageableProducts() {
-        if (!window.APP?.auth?.userId) { this.manageProducts = []; return; }
+        const role = window.APP?.auth?.role;
+        const isManager = role === 'seller' || role === 'supreme';
+
+        if (!window.APP?.auth?.userId || !isManager) {
+            this.manageProducts = [];
+            return;
+        }
 
         try {
             let query = this._baseQuery();
-            if (window.APP.auth.role === 'seller') {
+            if (role === 'seller') {
                 query = query.eq('owner_id', window.APP.auth.userId);
             }
 
@@ -276,7 +334,7 @@ const Products = {
             ]);
 
             this.renderAdmin();
-            if (window.APP.auth.role === 'seller') this.renderSeller();
+            if (role === 'seller') this.renderSeller();
         } catch (err) {
             log(`❌ Erro ao carregar produtos para gestão: ${err.message}`, 'error');
         }
@@ -461,7 +519,9 @@ const Products = {
                         class="product-fav-btn ${this.isFavorite(p.id) ? 'is-fav' : ''}"
                         aria-label="Favoritar produto"
                         title="Favoritar">
-                        <i data-lucide="heart"></i>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                        </svg>
                     </button>
                 </div>
 
@@ -599,6 +659,52 @@ const Products = {
         ` : '';
 
         bar.innerHTML = chips + favChip;
+
+        // ✅ NOVO: garante que as setas de navegação (desktop) estão
+        // ligadas e com o estado (mostrar/esconder) certo pro conteúdo
+        // que acabou de ser montado.
+        this._bindCategoryScrollArrows();
+        this._updateCategoryScrollArrows?.();
+    },
+
+    /**
+     * ✅ NOVO: rola a faixa de categorias pro lado — chamada pelas
+     * setinhas que só aparecem em quem usa mouse/trackpad (no toque, o
+     * gesto de arrastar já resolve sozinho).
+     */
+    scrollCategoryBar(direction) {
+        const bar = document.getElementById('category-filter-bar');
+        if (!bar) return;
+        bar.scrollBy({ left: direction * 240, behavior: 'smooth' });
+    },
+
+    /**
+     * ✅ NOVO: liga (uma única vez) o listener que mostra/esconde cada
+     * seta conforme o ponto em que a faixa está rolada — não faz
+     * sentido mostrar "← anteriores" já no início, nem "próximas →"
+     * quando já chegou no fim.
+     */
+    _bindCategoryScrollArrows() {
+        if (this._categoryArrowsBound) return;
+
+        const bar = document.getElementById('category-filter-bar');
+        const leftBtn = document.getElementById('category-scroll-left');
+        const rightBtn = document.getElementById('category-scroll-right');
+        if (!bar || !leftBtn || !rightBtn) return;
+
+        this._categoryArrowsBound = true;
+
+        const update = () => {
+            const maxScroll = bar.scrollWidth - bar.clientWidth;
+            leftBtn.classList.toggle('is-hidden', bar.scrollLeft <= 4);
+            rightBtn.classList.toggle('is-hidden', maxScroll <= 4 || bar.scrollLeft >= maxScroll - 4);
+        };
+
+        bar.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+
+        this._updateCategoryScrollArrows = update;
+        update();
     },
 
     filterByCategory(category) {
