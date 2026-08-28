@@ -229,16 +229,21 @@ aside.app-sidebar {
     overflow: hidden;
 }
 
+/* Notebook/Desktop largo: sidebar completa com labels */
 @media (min-width: 1024px) {
     aside.app-sidebar { width: 256px; }
     aside.app-sidebar span { display: block; }
 }
 
+/* Tablet (769px-1023px): sidebar compacta só ícones */
 @media (min-width: 769px) and (max-width: 1023px) {
     aside.app-sidebar span { display: none; }
     aside.app-sidebar .w-full { justify-content: center; padding-left: 0; padding-right: 0; }
 }
 
+/* ========================================
+   MOBILE: ocultar sidebar, mostrar bottom nav
+   ======================================== */
 @media (max-width: 768px) {
     aside.app-sidebar { display: none !important; }
     main { padding-bottom: calc(var(--bottom-nav-height) + 1rem) !important; }
@@ -374,6 +379,7 @@ aside.app-sidebar {
 }
 /* ========================================
    STORE STATUS — SABBATH / NIGHT CLOSED
+   (store-status.css integrado — fix nome com espaço)
    ======================================== */
 
 #store-closed-overlay {
@@ -502,6 +508,7 @@ aside.app-sidebar {
     line-height: 1.6;
 }
 
+/* Sabbath — visual diferenciado */
 #store-closed-overlay[data-mode="sabbath_closed"] .store-closed-content {
     border-color: rgba(251, 191, 36, 0.2);
     background: linear-gradient(145deg, #0f1628, #1a1608);
@@ -515,10 +522,12 @@ aside.app-sidebar {
     color: #fbbf24;
 }
 
+/* Night mode — visual diferenciado */
 #store-closed-overlay[data-mode="night_closed"] .store-closed-emoji {
     filter: drop-shadow(0 0 30px rgba(100, 116, 139, 0.5));
 }
 
+/* Mobile */
 @media (max-width: 480px) {
     .store-closed-content {
         padding: 2.5rem 1.75rem;
@@ -529,7 +538,7 @@ aside.app-sidebar {
 }
 
 /* ============================================================
-   Vendor Status Button
+   CSS para Vendor Status Button
    ============================================================ */
 
 .vendor-status-container {
@@ -594,6 +603,7 @@ aside.app-sidebar {
     50% { opacity: 0.7; }
 }
 
+/* Produtos desabilitados */
 .product-disabled {
     opacity: 0.5;
     pointer-events: none;
@@ -617,6 +627,7 @@ aside.app-sidebar {
     border-radius: 8px;
 }
 
+/* HEADER */
 .vendor-status-header {
     display: flex;
     justify-content: space-between;
@@ -677,6 +688,7 @@ aside.app-sidebar {
     50% { opacity: 0.6; }
 }
 
+/* HORÁRIO AUTOMÁTICO */
 .vendor-schedule-container {
     margin-bottom: 16px;
     padding-bottom: 16px;
@@ -808,6 +820,7 @@ input:checked + .toggle-slider:before {
     color: #0b0f1a;
 }
 
+/* STATUS INFO */
 .vendor-status-info {
     margin-bottom: 16px;
     padding-bottom: 16px;
@@ -831,6 +844,7 @@ input:checked + .toggle-slider:before {
     font-weight: 600;
 }
 
+/* HISTÓRICO */
 .vendor-status-history h4 {
     margin: 0 0 8px 0;
     font-size: 12px;
@@ -879,6 +893,7 @@ input:checked + .toggle-slider:before {
     font-size: 10px;
 }
 
+/* MOBILE RESPONSIVO */
 @media (max-width: 768px) {
     .vendor-status-section {
         margin: 12px -16px;
@@ -896,6 +911,9 @@ input:checked + .toggle-slider:before {
     }
 }
 
+/* style.css - ADICIONAR Grid Responsivo para Produtos */
+
+/* Products Grid - Igual ao estoque */
 .products-grid {
     display: grid;
     gap: 16px;
@@ -1015,6 +1033,7 @@ input:checked + .toggle-slider:before {
     cursor: not-allowed;
 }
 
+/* TABLET - Grid 2 colunas */
 @media (min-width: 768px) {
     .products-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -1034,6 +1053,7 @@ input:checked + .toggle-slider:before {
     }
 }
 
+/* PC - Grid 3-4 colunas */
 @media (min-width: 1024px) {
     .products-grid {
         grid-template-columns: repeat(3, 1fr);
@@ -1059,8 +1079,12 @@ input:checked + .toggle-slider:before {
     }
 }
 
+/* Mobile mantém 1 coluna */
+
 /* ========================================
    LEGENDA PRÓPRIA — TOP PRODUTOS (BI)
+   Substitui a legenda nativa do Chart.js, que cortava
+   texto/itens quando faltava altura (principalmente mobile).
    ======================================== */
 
 .chart-legend-list {
@@ -1105,6 +1129,7 @@ input:checked + .toggle-slider:before {
     font-size: 11px;
 }
 
+/* MOBILE: fonte um pouco maior pra facilitar o toque/leitura */
 @media (max-width: 768px) {
     .legend-item {
         font-size: 13px;
@@ -1117,6 +1142,9 @@ input:checked + .toggle-slider:before {
 
 /* ========================================
    FEEDBACK VISUAL — ADICIONAR AO CARRINHO
+   Toast de confirmação + bounce no contador do carrinho +
+   flash no botão clicado. Pensado mobile-first: toast fica
+   acima da bottom nav no celular, e no canto inferior no desktop.
    ======================================== */
 
 #cart-toast-container {
@@ -1242,11 +1270,15 @@ input:checked + .toggle-slider:before {
 }
 
 /* ========================================
-   SELO DE NOTIFICAÇÃO DE VENDA
+   ✅ NOVO: SELO DE NOTIFICAÇÃO DE VENDA
+   Aparece no botão BI (sidebar e bottom nav) quando chega uma venda
+   nova via tempo real, e some quando o vendedor abre a aba BI.
    ======================================== */
 
 #bi-nav-btn,
-#bnav-bi {
+#bnav-bi,
+#moderation-nav-btn,
+#bnav-moderation {
     position: relative;
 }
 
@@ -1274,6 +1306,24 @@ input:checked + .toggle-slider:before {
     right: 14px;
 }
 
+#bnav-moderation .sale-badge {
+    top: -2px;
+    right: 14px;
+}
+
+/* ========================================
+   ✅ NOVO: TOAST DE MODERAÇÃO DE PRODUTO
+   Usa a mesma base visual do toast de carrinho/venda, com um
+   estado extra "flagged" (borda vermelha) pra produto retido.
+   ======================================== */
+.mod-toast {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.mod-toast-flagged {
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
 @keyframes saleBadgePulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.15); }
@@ -1284,7 +1334,15 @@ input:checked + .toggle-slider:before {
 }
 
 /* ========================================
-   IDENTIDADE VISUAL + ENGAJAMENTO
+   ✅ REDESIGN v5.0 — IDENTIDADE VISUAL + ENGAJAMENTO
+   Objetivo: tipografia com mais personalidade (Sora nos
+   títulos + Inter no corpo), um segundo acento de cor em
+   gradiente (azul → roxo → âmbar) pra sensação de
+   "comunidade viva", selos de Novidade/Últimas Unidades na
+   vitrine, entrada escalonada dos cards + zoom na imagem no
+   hover, um convite visual pra rolar a tela logo abaixo do
+   banner, e um botão flutuante de voltar ao topo — tudo
+   pensado pra fazer a pessoa continuar rolando a vitrine.
    ======================================== */
 
 :root {
@@ -1302,6 +1360,9 @@ h1, h2, h3, .font-black, .font-bold {
     letter-spacing: -0.02em;
 }
 
+/* ----------------------------------------
+   Subtítulo da vitrine (embaixo do "Marketplace")
+   ---------------------------------------- */
 .market-subtitle {
     color: #94a3b8;
     font-size: 0.85rem;
@@ -1312,6 +1373,9 @@ h1, h2, h3, .font-black, .font-bold {
     margin-bottom: 1.5rem;
 }
 
+/* ----------------------------------------
+   Convite visual pra rolar a página
+   ---------------------------------------- */
 .scroll-cue {
     display: flex;
     align-items: center;
@@ -1338,6 +1402,9 @@ h1, h2, h3, .font-black, .font-bold {
     .scroll-cue { animation: none; }
 }
 
+/* ----------------------------------------
+   Selos de produto — Novidade / Últimas Unidades
+   ---------------------------------------- */
 .product-badge-row {
     display: flex;
     gap: 6px;
@@ -1376,6 +1443,11 @@ h1, h2, h3, .font-black, .font-bold {
     .badge-urgent { animation: none; }
 }
 
+/* ----------------------------------------
+   Cards da vitrine: entrada escalonada + zoom na imagem
+   (usa a variável --i, definida inline pelo products.js,
+   pra calcular o atraso de cada card na sequência)
+   ---------------------------------------- */
 #product-grid > div {
     animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards;
     animation-delay: calc(var(--i, 0) * 0.06s);
@@ -1395,6 +1467,9 @@ h1, h2, h3, .font-black, .font-bold {
     #product-grid > div:hover img { transform: none; }
 }
 
+/* ----------------------------------------
+   Banner de anúncio com brilho de borda em gradiente
+   ---------------------------------------- */
 #ads-hero { position: relative; }
 #ads-hero::before {
     content: '';
@@ -1410,11 +1485,17 @@ h1, h2, h3, .font-black, .font-bold {
     pointer-events: none;
 }
 
+/* ----------------------------------------
+   Categoria ativa ganha o gradiente da marca
+   ---------------------------------------- */
 #category-filter-bar button.bg-blue-600 {
     background: var(--community-gradient) !important;
     border-color: transparent !important;
 }
 
+/* ----------------------------------------
+   Botão flutuante — Voltar ao topo
+   ---------------------------------------- */
 #back-to-top {
     position: fixed;
     right: 20px;
@@ -1447,9 +1528,21 @@ h1, h2, h3, .font-black, .font-bold {
     #back-to-top { bottom: 24px; }
 }
 
+/* ----------------------------------------
+   Classes que faltavam no tailwind.built.css
+   (pré-compilado antes dessas classes existirem
+   no projeto) — usadas no chip de expiração de
+   pedido pendente, no BI.
+   ---------------------------------------- */
 .bg-orange-600\/20 { background-color: rgba(234, 88, 12, 0.2); }
 .bg-slate-600\/30 { background-color: rgba(71, 85, 105, 0.3); }
 
+/* ----------------------------------------
+   Galeria de mídia do card de produto — rolagem
+   horizontal nativa (toque), com bolinhas de
+   posição. Vídeo usa os controles nativos do
+   navegador (sem autoplay).
+   ---------------------------------------- */
 .product-gallery {
     position: relative;
 }
@@ -1505,6 +1598,10 @@ video.product-gallery-item {
     border-radius: 999px;
 }
 
+/* ----------------------------------------
+   Preview de mídia no formulário de produto
+   (até 5 fotos/vídeos, com botão de remover)
+   ---------------------------------------- */
 .media-preview-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1564,6 +1661,10 @@ video.product-gallery-item {
     padding: 16px 0;
 }
 
+/* ----------------------------------------
+   Selo "X vendidos" — prova social estilo
+   Shopee/AliExpress/SheIn
+   ---------------------------------------- */
 .product-sold-count {
     display: inline-block;
     font-size: 10.5px;
@@ -1571,6 +1672,11 @@ video.product-gallery-item {
     color: #94a3b8;
 }
 
+/* ----------------------------------------
+   Barra de busca — igual ao topo de qualquer
+   grande marketplace (Shopee/AliExpress/SheIn
+   sempre abrem com busca em destaque)
+   ---------------------------------------- */
 #market-search-bar {
     position: relative;
     display: flex;
@@ -1622,6 +1728,10 @@ video.product-gallery-item {
 #market-search-clear svg { width: 13px; height: 13px; }
 #market-search-clear:hover { background: rgba(255,255,255,0.18); }
 
+/* ----------------------------------------
+   Chips de categoria com ícone — fileira de
+   atalhos visuais, igual Shopee/AliExpress
+   ---------------------------------------- */
 .category-chip {
     display: inline-flex;
     align-items: center;
@@ -1658,6 +1768,10 @@ video.product-gallery-item {
     font-size: 10px;
 }
 
+/* ----------------------------------------
+   Botão de favoritar (coração) sobre a imagem
+   do produto — clássico de app de compras
+   ---------------------------------------- */
 .product-fav-btn {
     position: absolute;
     top: 10px;
@@ -1684,96 +1798,58 @@ video.product-gallery-item {
 }
 .product-fav-btn.is-fav svg { fill: #ef4444; }
 
-/* ========================================
-   ✅ NOVO: CARTÕES "ESQUELETO" — efeito de carregamento
-   da vitrine, enquanto os produtos de verdade ainda não
-   chegaram do banco. Cor neutra (cinza-azulado) funciona
-   em cima de fundo claro OU escuro sem precisar de regra
-   extra no theme.css.
-   ======================================== */
-.skeleton-card {
-    background: var(--bg-card, #161b2c);
-    border: 1px solid var(--border-color, rgba(255,255,255,0.05));
-    border-radius: 2rem;
-    padding: 1.5rem;
+/* ----------------------------------------
+   ✅ FIX: BARRA DE CATEGORIAS — linha única
+   com rolagem, em vez de quebrar linha.
+   No celular, o próprio gesto de arrastar o
+   dedo já rola a faixa (scroll nativo). No
+   PC/notebook (mouse/trackpad), aparecem
+   setinhas ◀ ▶ ao lado, que só mostram quando
+   há mais categorias pra ver naquela direção.
+   ---------------------------------------- */
+.category-filter-wrapper {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
+    align-items: center;
+    gap: 8px;
 }
 
-.skeleton-block {
-    border-radius: 0.75rem;
-    background: linear-gradient(90deg,
-        rgba(148,163,184,0.14) 25%,
-        rgba(148,163,184,0.32) 37%,
-        rgba(148,163,184,0.14) 63%);
-    background-size: 400% 100%;
-    animation: skeleton-shimmer 1.4s ease infinite;
-}
-
-.skeleton-img { height: 11rem; border-radius: 1rem; }
-.skeleton-line { height: 14px; }
-
-@keyframes skeleton-shimmer {
-    0%   { background-position: 100% 50%; }
-    100% { background-position: 0 50%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .skeleton-block { animation: none; }
-}
-
-/* ========================================
-   ✅ NOVO: TELA DE CARREGAMENTO INICIAL (SPLASH)
-   Aparece instantaneamente (é a primeiríssima coisa
-   desenhada na tela) e some sozinha quando o app termina
-   de inicializar — sem isso, numa conexão mais lenta, a
-   pessoa via a barra lateral e a vitrine vazias por alguns
-   segundos, parecendo que o site tinha travado.
-   ======================================== */
-#app-boot-splash {
-    position: fixed;
-    inset: 0;
-    z-index: 999999;
+.category-filter-bar {
     display: flex;
-    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 2px;
+}
+.category-filter-bar::-webkit-scrollbar { display: none; }
+
+.category-scroll-arrow {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(15, 23, 42, 0.7);
+    color: #fff;
+    display: flex;
     align-items: center;
     justify-content: center;
-    gap: 18px;
-    background: var(--bg-dark, #0b0f1a);
-    transition: opacity 0.35s ease;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    transition: background .2s ease, transform .15s ease;
 }
+.category-scroll-arrow:hover { background: rgba(15, 23, 42, 0.9); filter: none; }
+.category-scroll-arrow:active { transform: scale(0.92); }
+.category-scroll-arrow svg,
+.category-scroll-arrow i { width: 18px; height: 18px; pointer-events: none; }
+.category-scroll-arrow.is-hidden { display: none; }
 
-html[data-theme="light"] #app-boot-splash {
-    background: #f1f5f9;
-}
-
-#app-boot-splash.boot-splash-hide {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.boot-splash-spinner {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 4px solid rgba(59,130,246,0.2);
-    border-top-color: #3b82f6;
-    animation: boot-splash-spin 0.8s linear infinite;
-}
-
-.boot-splash-text {
-    font-family: 'Inter', -apple-system, sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: #64748b;
-}
-
-@keyframes boot-splash-spin {
-    to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .boot-splash-spinner { animation-duration: 2s; }
+/* No toque (celular/tablet), o gesto de arrastar já resolve — as
+   setinhas ficam reservadas pra quem usa mouse/trackpad. */
+@media (hover: none) and (pointer: coarse) {
+    .category-scroll-arrow { display: none !important; }
 }
