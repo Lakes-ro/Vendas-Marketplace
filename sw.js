@@ -14,7 +14,7 @@
  *    em todos os aparelhos que já tinham o Service Worker instalado.
  */
 
-const CACHE_VERSION = 'marketplace-v5.9';
+const CACHE_VERSION = 'marketplace-v5.11';
 const CACHE_NAME = CACHE_VERSION;
 
 const ASSETS_TO_CACHE = [
@@ -46,6 +46,9 @@ const ASSETS_TO_CACHE = [
     './admin-warnings.js',
     './vendor-settings.js',
     './notifications.js',
+    './moderation.js',
+    './restock-alerts.js',
+    './onboarding.js',
     './pwa.js',
     './app.js',
     './theme-toggle.js'

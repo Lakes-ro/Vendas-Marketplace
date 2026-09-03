@@ -45,16 +45,25 @@ const Cart = {
         if (drawer) drawer.classList.add('translate-x-full');
     },
 
-    add(productId, productName, price) {
+    add(productId, productName, price, bulkMinQty, bulkUnitPrice) {
         if (window.StoreStatus && typeof StoreStatus.canAddToCart === 'function') {
             if (!StoreStatus.canAddToCart()) return;
         }
 
-        this.items.push({ id: productId, name: productName, price });
+        this.items.push({
+            id: productId,
+            name: productName,
+            price,
+            bulkMinQty: bulkMinQty || null,
+            bulkUnitPrice: bulkUnitPrice || null
+        });
         Storage.saveCart(this.items);
         this.updateUI();
 
         this.showAddedFeedback(productName);
+
+        // ✅ NOVO: missão de onboarding
+        window.APP?.onboarding?.markMission?.('cart');
 
         log(`Item adicionado: ${productName}`, 'success');
     },
@@ -121,22 +130,43 @@ const Cart = {
         const bnavCount = document.getElementById('bnav-cart-count');
         if (bnavCount) bnavCount.innerText = count;
 
+        // ✅ NOVO: preço por atacado — conta quantas unidades de cada
+        // produto já estão no carrinho, pra saber se bate a quantidade
+        // mínima do desconto. O valor cobrado de VERDADE é sempre
+        // recalculado no banco (create_order); isso aqui é só pra o
+        // comprador já ver o valor certo antes de fechar a compra.
+        const qtyById = {};
+        this.items.forEach(item => { qtyById[item.id] = (qtyById[item.id] || 0) + 1; });
+
+        const effectivePrice = (item) => {
+            const qty = qtyById[item.id] || 1;
+            if (item.bulkMinQty && item.bulkUnitPrice && qty >= item.bulkMinQty) {
+                return Number(item.bulkUnitPrice);
+            }
+            return Number(item.price);
+        };
+
         const itemsDiv = document.getElementById('cart-items');
         if (itemsDiv) {
-            itemsDiv.innerHTML = this.items.map((item, idx) => `
+            itemsDiv.innerHTML = this.items.map((item, idx) => {
+                const unitPrice = effectivePrice(item);
+                const gotDiscount = unitPrice < Number(item.price);
+                return `
                 <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
                     <div class="flex flex-col flex-1">
                         <span class="text-white font-bold text-xs">${item.name}</span>
-                        <span class="text-blue-500 font-black text-[10px]">R$ ${window.formatBRL(item.price)}</span>
+                        <span class="text-blue-500 font-black text-[10px]">R$ ${window.formatBRL(unitPrice)}</span>
+                        ${gotDiscount ? `<span class="text-cyan-400 font-bold text-[9px] mt-0.5">🎉 Preço de atacado aplicado</span>` : ''}
                     </div>
                     <button onclick="window.APP.cart.remove(${idx})" class="text-red-500 hover:text-red-400 ml-2">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
-        const total = this.items.reduce((acc, item) => acc + Number(item.price), 0);
+        const total = this.items.reduce((acc, item) => acc + effectivePrice(item), 0);
         const cartTotal = document.getElementById('cart-total');
         if (cartTotal) cartTotal.innerText = `R$ ${window.formatBRL(total)}`;
 
@@ -181,7 +211,16 @@ const Cart = {
     },
 
     getTotal() {
-        return this.items.reduce((acc, item) => acc + Number(item.price), 0);
+        const qtyById = {};
+        this.items.forEach(item => { qtyById[item.id] = (qtyById[item.id] || 0) + 1; });
+
+        return this.items.reduce((acc, item) => {
+            const qty = qtyById[item.id] || 1;
+            const unitPrice = (item.bulkMinQty && item.bulkUnitPrice && qty >= item.bulkMinQty)
+                ? Number(item.bulkUnitPrice)
+                : Number(item.price);
+            return acc + unitPrice;
+        }, 0);
     },
 
     clear() {

@@ -217,6 +217,12 @@ const VendorSettings = {
             this.pixKey = value;
             if (window.APP?.auth?.profile) window.APP.auth.profile.pix_key = value;
 
+            this.render();
+            window.APP?.auth?._checkPixKeyReminder?.();
+
+            // ✅ NOVO: missão de onboarding
+            window.APP?.onboarding?.markMission?.('pix');
+
             alert('✅ Chave Pix salva! É essa chave que vai aparecer pros compradores no checkout.');
         } catch (err) {
             console.error('Erro ao salvar chave Pix:', err);
@@ -267,6 +273,13 @@ const VendorSettings = {
         if (pixInput && document.activeElement !== pixInput) {
             pixInput.value = this.pixKey || '';
         }
+
+        // ✅ NOVO: acende o aviso vermelho quando a chave ainda não foi
+        // cadastrada — reforça, dentro da própria tela, por que isso
+        // importa (evita que a venda dependa de combinar tudo no
+        // WhatsApp).
+        const pixWarning = document.getElementById('vendor-pix-key-warning');
+        if (pixWarning) pixWarning.classList.toggle('hidden', !!(this.pixKey && this.pixKey.trim()));
 
         if (historyList) {
             historyList.innerHTML = this.renderHistory();
@@ -360,6 +373,9 @@ const VendorSettings = {
             await this.loadHistory();
             this.render();
 
+            // ✅ NOVO: missão de onboarding
+            window.APP?.onboarding?.markMission?.('status');
+
             if (window.APP?.products?.fetchAll) {
                 window.APP.products.fetchAll();
             }
@@ -399,6 +415,9 @@ const VendorSettings = {
 
             this.openingTime = openingTime;
             this.closingTime = closingTime;
+
+            // ✅ NOVO: missão de onboarding
+            window.APP?.onboarding?.markMission?.('status');
 
             alert('✅ Horário salvo! O sistema aplica automaticamente todo minuto (mesmo com essa aba fechada).');
             this.render();

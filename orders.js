@@ -212,6 +212,9 @@ const Orders = {
             window.APP.cart.clear();
             this.closeCustomerModal();
 
+            // ✅ NOVO: missão de onboarding
+            window.APP?.onboarding?.markMission?.('purchase');
+
             // A própria função já devolve nome/telefone do vendedor de
             // cada item — só falta montar o link do WhatsApp.
             const itemsWithVendor = (result.items || []).map(i => ({
@@ -352,7 +355,7 @@ const Orders = {
             <div class="bg-white/10 p-3 rounded-xl text-center">
                 <div class="text-xs text-slate-500 mb-2">Chave Pix de ${safeVendorName}</div>
                 <div class="text-white font-mono text-sm break-all font-bold">${esc(group.pixKey)}</div>
-                <button onclick="navigator.clipboard.writeText('${esc(group.pixKey).replace(/'/g, "\\'")}'); this.innerText = '✅ COPIADO!'" class="mt-2 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-500 w-full font-bold">
+                <button onclick="navigator.clipboard.writeText('${esc(group.pixKey).replace(/'/g, "\\'")}'); this.innerText = '✅ COPIADO!'" class="no-print mt-2 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-500 w-full font-bold">
                     📋 COPIAR CHAVE
                 </button>
             </div>
@@ -374,7 +377,7 @@ const Orders = {
 
                 ${pixKeyBlock}
 
-                <div>
+                <div class="no-print">
                     <div id="proof-zone-${zoneKey}"
                          class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center hover:border-blue-500 transition-colors cursor-pointer"
                          onclick="document.getElementById('proof-input-${zoneKey}').click()">
@@ -422,7 +425,7 @@ const Orders = {
 
         const receiptHTML = `
             <div class="fixed inset-0 z-[5000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
-                <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-slate-800 max-h-[90vh] overflow-y-auto">
+                <div id="receipt-print-area" class="print-area bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-slate-800 max-h-[90vh] overflow-y-auto">
 
                     <div class="text-center border-b border-slate-700 pb-6 mb-6">
                         <div class="text-5xl mb-2">✅</div>
@@ -507,7 +510,7 @@ const Orders = {
                         `}
                     </div>
 
-                    <div class="space-y-3">
+                    <div class="space-y-3 no-print">
                         <button onclick="this.closest('.fixed').remove()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-500 transition-all">
                             ✓ FECHAR COMPROVANTE
                         </button>

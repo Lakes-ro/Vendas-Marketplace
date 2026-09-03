@@ -1,29 +1,20 @@
 /**
- * APP.JS v6.1
+ * APP.JS v5.4
  * ✅ Navigation.init() chamado corretamente (registra event listeners)
  * ✅ Removidas dependências de arquivos inexistentes
  * ✅ try/catch em cada módulo para não propagar falhas
- * ✅ Notifications — avisa o vendedor em tempo real quando um
+ * ✅ Adicionado VendorSettings (Status da Loja via Supabase)
+ * ✅ v5.2: Notifications — avisa o vendedor em tempo real quando um
  *    produto dele é vendido (toast + selo no botão BI)
- * ✅ v6.0 PERFORMANCE (auditoria): StoreStatus, VendorSettings,
- *    Products.fetchAll e Ads.init eram 4 idas ao banco que NÃO
- *    dependem umas das outras, mas rodavam uma atrás da outra
- *    (await em série) — cada uma esperando a anterior terminar antes
- *    de sequer começar. Agora rodam em paralelo com Promise.allSettled
- *    (que, assim como o try/catch de cada uma antes, garante que uma
- *    falha isolada não trava as outras nem o restante do app). Isso
- *    reduz o tempo de inicialização ao tempo da mais lenta das quatro,
- *    em vez da SOMA das quatro. Auth continua rodando ANTES desse
- *    bloco, porque Products/Ads dependem do cargo (role) do usuário
- *    pra saber o que carregar.
- * ✅ v6.1 NOVO — PRIMEIRA IMPRESSÃO: index.html agora mostra uma tela
- *    de carregamento (splash, puramente HTML/CSS, aparece instantâneo)
- *    logo que a página abre — sem isso, quem entra pela primeira vez
- *    via internet mais lenta via alguns segundos de sidebar/vitrine
- *    vazias, parecendo que o site travou. Essa splash só desaparece
- *    quando o APP termina de inicializar (ou, no pior caso, depois de
- *    um tempo máximo de segurança — ver _hideBootSplash abaixo) —
- *    nunca fica presa na tela pra sempre, mesmo se algo falhar.
+ * ✅ v5.2: Moderation — avisa o Admin Supremo em tempo real toda vez
+ *    que um produto novo é publicado (nome do vendedor, produto, imagem,
+ *    descrição), com fila de aprovação/bloqueio e lista de palavras
+ *    proibidas editável
+ * ✅ v5.3: RestockAlerts — avisa quem favoritou um produto esgotado
+ *    assim que ele volta a ter estoque (toast + conferência periódica)
+ * ✅ v5.4 NOVO: Onboarding — tutorial passo a passo (comprador e
+ *    vendedor) + missões simples de gamificação, revisável a qualquer
+ *    hora pelo botão "❓" flutuante
  */
 
 const APP = {
@@ -38,26 +29,13 @@ const APP = {
     tenants: null,
     vendorSettings: null,
     notifications: null,
-
-    /**
-     * ✅ NOVO (v6.1): esconde a tela de carregamento inicial (splash)
-     * com uma transição suave. Chamada tanto no caminho de sucesso
-     * quanto no de erro do init() (bloco finally, mais abaixo) — e
-     * também por um temporizador de segurança independente, lá no
-     * final deste arquivo, pro caso de algo travar de um jeito que
-     * nem o try/catch consiga pegar.
-     */
-    _hideBootSplash() {
-        const el = document.getElementById('app-boot-splash');
-        if (!el || el.dataset.hidden === '1') return;
-        el.dataset.hidden = '1';
-        el.classList.add('boot-splash-hide');
-        setTimeout(() => el.remove(), 400);
-    },
+    moderation: null,
+    restockAlerts: null,
+    onboarding: null,
 
     async init() {
         try {
-            log('🚀 Inicializando APP v6.1...', 'info');
+            log('🚀 Inicializando APP v5.4...', 'info');
 
             if (!window._supabase) {
                 throw new Error('Supabase não disponível — verifique o CDN antes de config.js');
@@ -71,8 +49,7 @@ const APP = {
                 log(`⚠️ Navigation.init falhou: ${navErr.message}`, 'warning');
             }
 
-            // 2. AUTH — precisa terminar primeiro: Products (manageProducts) e
-            // Ads (setup por cargo) dependem de saber o role/userId do usuário.
+            // 2. AUTH
             window.APP.auth = Auth;
             try {
                 await window.APP.auth.init();
@@ -80,26 +57,37 @@ const APP = {
                 log(`⚠️ Auth.init falhou: ${authErr.message}`, 'warning');
             }
 
-            // 3-6. ✅ PARALELO: StoreStatus, VendorSettings, Products e Ads não
-            // dependem uns dos outros — rodam juntos em vez de em fila.
+            // 3. STORE STATUS
             window.APP.storeStatus = StoreStatus;
+            try {
+                if (!StoreStatus.checkInterval) StoreStatus.init();
+            } catch (ssErr) {
+                log(`⚠️ StoreStatus.init falhou: ${ssErr.message}`, 'warning');
+            }
+
+            // 4. VENDOR SETTINGS (Status da Loja — Supabase)
             window.APP.vendorSettings = VendorSettings;
+            try {
+                await window.APP.vendorSettings.init();
+            } catch (vsErr) {
+                log(`⚠️ VendorSettings.init falhou: ${vsErr.message}`, 'warning');
+            }
+
+            // 5. PRODUCTS
             window.APP.products = Products;
+            try {
+                await window.APP.products.fetchAll();
+            } catch (prodErr) {
+                log(`⚠️ Products.fetchAll falhou: ${prodErr.message}`, 'warning');
+            }
+
+            // 6. ADS
             window.APP.ads = Ads;
-
-            const results = await Promise.allSettled([
-                (!StoreStatus.checkInterval ? StoreStatus.init() : Promise.resolve()),
-                VendorSettings.init(),
-                Products.fetchAll(),
-                Ads.init()
-            ]);
-
-            const labels = ['StoreStatus.init', 'VendorSettings.init', 'Products.fetchAll', 'Ads.init'];
-            results.forEach((r, i) => {
-                if (r.status === 'rejected') {
-                    log(`⚠️ ${labels[i]} falhou: ${r.reason?.message || r.reason}`, 'warning');
-                }
-            });
+            try {
+                await window.APP.ads.init();
+            } catch (adsErr) {
+                log(`⚠️ Ads.init falhou: ${adsErr.message}`, 'warning');
+            }
 
             // 7. MÓDULOS SÍNCRONOS
             window.APP.tenants = Tenants;
@@ -123,9 +111,7 @@ const APP = {
             // 10. ORDERS
             window.APP.orders = Orders;
 
-            // 11. NOTIFICATIONS (aviso de venda em tempo real) — depende de
-            // Products.manageProducts já carregado, por isso vem depois do
-            // bloco paralelo acima.
+            // 11. ✅ NOVO: NOTIFICATIONS (aviso de venda em tempo real)
             window.APP.notifications = Notifications;
             try {
                 window.APP.notifications.init();
@@ -133,27 +119,46 @@ const APP = {
                 log(`⚠️ Notifications.init falhou: ${notifErr.message}`, 'warning');
             }
 
-            // 12. PWA INSTALL (banner de instalar na tela inicial)
+            // 12. ✅ NOVO: MODERATION (aviso de produto novo + fila de aprovação)
+            window.APP.moderation = Moderation;
+            try {
+                window.APP.moderation.init();
+            } catch (modErr) {
+                log(`⚠️ Moderation.init falhou: ${modErr.message}`, 'warning');
+            }
+
+            // 13. ✅ NOVO: RESTOCK ALERTS (avisa quem favoritou um produto
+            // esgotado assim que ele volta a ter estoque)
+            window.APP.restockAlerts = RestockAlerts;
+            try {
+                window.APP.restockAlerts.startWatching();
+            } catch (raErr) {
+                log(`⚠️ RestockAlerts falhou: ${raErr.message}`, 'warning');
+            }
+
+            // 14. ✅ NOVO: ONBOARDING (tutorial passo a passo + missões)
+            window.APP.onboarding = Onboarding;
+            try {
+                window.APP.onboarding.init();
+            } catch (onbErr) {
+                log(`⚠️ Onboarding.init falhou: ${onbErr.message}`, 'warning');
+            }
+
+            // 15. ✅ NOVO: PWA INSTALL (banner de instalar na tela inicial)
             try {
                 PwaInstall.init();
             } catch (pwaErr) {
                 log(`⚠️ PwaInstall.init falhou: ${pwaErr.message}`, 'warning');
             }
 
-            // 13. Renderizar ícones Lucide
+            // 16. Renderizar ícones Lucide
             if (window.lucide) lucide.createIcons();
 
-            log('✅ APP v6.1 inicializado com sucesso!', 'success');
+            log('✅ APP v5.4 inicializado com sucesso!', 'success');
 
         } catch (err) {
             log(`❌ Erro crítico: ${err.message}`, 'error');
             console.error(err);
-        } finally {
-            // ✅ NOVO (v6.1): a splash some daqui, não importa se deu
-            // tudo certo ou se algo falhou no meio do caminho — a
-            // pessoa nunca fica olhando pra uma tela de carregamento
-            // parada, mesmo em caso de erro.
-            this._hideBootSplash();
         }
     }
 };
@@ -165,7 +170,7 @@ window.goToTab    = (tab) => Navigation.showTab(tab);
 window.toggleCart = ()    => window.APP?.cart?.toggleCart?.();
 window.openLogin  = (tab) => window.APP?.auth?.openAuthModal?.(tab || 'login');
 window.doLogout   = ()    => window.APP?.auth?.logout?.();
-window.addToCart  = (id, name, price) => window.APP?.cart?.add?.(id, name, price);
+window.addToCart  = (id, name, price, bulkMinQty, bulkUnitPrice) => window.APP?.cart?.add?.(id, name, price, bulkMinQty, bulkUnitPrice);
 window.doCheckout = ()    => window.APP?.orders?.checkout?.();
 
 function log(message, type = 'info') {
@@ -184,14 +189,3 @@ if (document.readyState === 'loading') {
 } else {
     APP.init();
 }
-
-// ✅ NOVO (v6.1): rede de segurança TOTALMENTE independente do fluxo
-// normal do init() — mesmo que algo trave de um jeito bizarro que nem
-// o try/catch/finally do APP.init() consiga capturar, a splash some
-// sozinha depois de 8 segundos. Prefere mostrar o site "cru" (mesmo
-// que algo não tenha carregado) a deixar a pessoa presa numa tela de
-// carregamento pra sempre — que é o pior cenário possível pra quem tá
-// entrando pela primeira vez.
-setTimeout(() => {
-    if (window.APP?._hideBootSplash) window.APP._hideBootSplash();
-}, 8000);

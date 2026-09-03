@@ -68,7 +68,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=11">
 
     <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
          (26KB), gerado escaneando todo o projeto — no lugar do script
@@ -321,7 +321,7 @@
 
 
         <!-- ===== BI DASHBOARD ===== -->
-<section id="bi-section" class="hidden animate-in">
+<section id="bi-section" class="hidden animate-in print-area">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 id="bi-main-title" class="text-3xl font-black text-green-500">DASHBOARD BI</h2>
         <div class="flex items-center gap-3 flex-wrap">
@@ -695,6 +695,23 @@
                 </button>
             </div>
 
+            <div id="vendor-pix-key-section" class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
+                <h3 class="text-lg font-black text-slate-300 mb-2">💳 Minha Chave Pix</h3>
+                <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                    É essa chave que aparece pro comprador na hora de pagar. Sem ela cadastrada, a venda acontece do mesmo jeito, mas o comprador precisa te chamar no WhatsApp pra combinar o pagamento — o que atrasa (e às vezes derruba) a venda.
+                </p>
+                <div id="vendor-pix-key-warning" class="hidden mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 font-bold">
+                    ⚠️ Você ainda não cadastrou sua chave Pix — cadastre agora pra não perder vendas.
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="vendor-pix-key-input" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                        class="flex-1 p-3 bg-slate-800 border border-white/10 rounded-lg text-white text-sm placeholder-slate-500">
+                    <button type="button" id="vendor-save-pix-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-3 rounded-lg text-sm transition-all whitespace-nowrap">
+                        💾 Salvar Chave Pix
+                    </button>
+                </div>
+            </div>
+
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
                 <h3 class="text-lg font-black text-slate-300 mb-4">Status Atual</h3>
                 <button id="vendor-status-main-toggle" class="w-full py-4 px-6 rounded-xl font-bold text-white mb-4 transition-all" style="background:#22c55e;">
@@ -953,6 +970,21 @@
                     <input id="p-min-stock" type="number" placeholder="Estoque Mínimo" value="5" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
                     <div class="text-[10px] text-slate-500 mt-1 px-1">Abaixo desse número, o produto aparece no alerta de Estoque Crítico do BI</div>
                 </div>
+
+                <div class="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
+                    <label class="text-xs font-black text-cyan-300 uppercase block mb-2">📦 Preço por Atacado (opcional)</label>
+                    <div class="text-[10px] text-slate-500 mb-3 leading-relaxed">Comprando a partir de uma certa quantidade, cada unidade sai mais barata. Deixe os dois campos em branco pra não usar.</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <input id="p-bulk-min-qty" type="number" min="2" placeholder="Qtd. mínima" class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
+                            <div class="text-[9px] text-slate-500 mt-1 px-1">Ex: 3</div>
+                        </div>
+                        <div>
+                            <input id="p-bulk-unit-price" type="number" step="0.01" min="0" placeholder="Preço/unidade" class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
+                            <div class="text-[9px] text-slate-500 mt-1 px-1">Ex: 10,00</div>
+                        </div>
+                    </div>
+                </div>
                 <textarea id="p-desc" placeholder="Descrição" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 resize-none h-20"></textarea>
 
                 <!-- ✅ NOVO (v5.0): galeria de mídia — até 5 fotos/vídeos
@@ -1016,25 +1048,27 @@
     <script src="config.js?v=3"></script>
     <script src="storage.js?v=2"></script>
     <script src="wrapper.js?v=1"></script>
-    <script src="auth.js?v=7"></script>
+    <script src="auth.js?v=9"></script>
     <script src="store-status.js?v=2"></script>
-    <script src="cart.js?v=2"></script>
-    <script src="products.js?v=7"></script>
+    <script src="cart.js?v=4"></script>
+    <script src="products.js?v=10"></script>
     <script src="ads.js?v=6"></script>
     <script src="bi.js?v=9"></script>
-    <script src="navigation.js?v=4"></script>
+    <script src="navigation.js?v=5"></script>
     <script src="tenants.js?v=6"></script>
-    <script src="orders.js?v=5"></script>
+    <script src="orders.js?v=7"></script>
     <script src="order-management.js?v=2"></script>
     <script src="admin-warnings.js?v=2"></script>
-    <script src="vendor-settings.js?v=4"></script>
+    <script src="vendor-settings.js?v=6"></script>
     <script src="notifications.js?v=1"></script>
     <script src="moderation.js?v=1"></script>
+    <script src="restock-alerts.js?v=1"></script>
+    <script src="onboarding.js?v=1"></script>
     <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
          "pwa-install.js" que estava aqui não bate com nenhum arquivo,
          o que causaria um 404 silencioso. -->
     <script src="pwa.js?v=2"></script>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=6"></script>
     <script src="theme-toggle.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->

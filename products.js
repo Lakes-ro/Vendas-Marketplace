@@ -127,6 +127,8 @@ const Products = {
                 active,
                 created_at,
                 sales_count,
+                bulk_min_qty,
+                bulk_unit_price,
                 profiles!owner_id(id, full_name, email, phone, pix_key)
             `)
             .eq('active', true);
@@ -510,6 +512,18 @@ const Products = {
         const badges = `${isNew ? '<span class="product-badge badge-new">🆕 Novidade</span>' : ''}${isUrgent ? `<span class="product-badge badge-urgent">🔥 Só ${estoque} restam</span>` : ''}`;
         const soldBadge = sold > 0 ? `<span class="product-sold-count">🛍️ ${sold} vendido${sold > 1 ? 's' : ''}</span>` : '';
 
+        // ✅ NOVO: preço por atacado — se o produto tem desconto configurado
+        // pro vendedor, mostra o aviso na vitrine ("compre X ou mais e cada
+        // unidade sai por R$Y"). O valor cobrado de verdade é sempre
+        // recalculado no banco (create_order), então esse selo é só o
+        // reflexo do que já vale de fato.
+        const hasBulkPricing = !!(p.bulk_min_qty && p.bulk_unit_price);
+        const bulkBadge = hasBulkPricing ? `
+            <div class="product-bulk-badge">
+                📦 Compre <strong>${p.bulk_min_qty}+</strong> e pague <strong>R$ ${window.formatBRL(p.bulk_unit_price)}</strong> cada
+            </div>
+        ` : '';
+
         return `
             <div style="--i:${idx}" class="bg-slate-900/40 p-6 rounded-[32px] border border-white/5 flex flex-col gap-4 hover:border-blue-500/30 transition-all ${!vendorOnline ? 'opacity-60' : ''}">
                 <div class="relative">
@@ -544,6 +558,7 @@ const Products = {
                         ${!vendorOnline ? '🔌 Vendedor Offline' : disponivel ? `${estoque} em estoque` : 'Fora de estoque'}
                     </div>
                 </div>
+                ${bulkBadge}
                 ${soldBadge ? `<div class="-mt-2">${soldBadge}</div>` : ''}
 
                 ${waLink ? `
@@ -559,6 +574,8 @@ const Products = {
                     data-id="${p.id}"
                     data-name="${nome}"
                     data-price="${p.price}"
+                    data-bulk-min-qty="${p.bulk_min_qty || ''}"
+                    data-bulk-unit-price="${p.bulk_unit_price || ''}"
                     class="bg-blue-600 py-4 rounded-2xl font-black text-xs uppercase text-white hover:bg-blue-500 transition-all ${!disponivel ? 'opacity-50 cursor-not-allowed' : ''}"
                     ${!disponivel ? 'disabled' : ''}>
                     Adicionar ao Carrinho
@@ -696,8 +713,19 @@ const Products = {
 
         const update = () => {
             const maxScroll = bar.scrollWidth - bar.clientWidth;
-            leftBtn.classList.toggle('is-hidden', bar.scrollLeft <= 4);
-            rightBtn.classList.toggle('is-hidden', maxScroll <= 4 || bar.scrollLeft >= maxScroll - 4);
+            const atStart = bar.scrollLeft <= 4;
+            const atEnd = maxScroll <= 4 || bar.scrollLeft >= maxScroll - 4;
+
+            leftBtn.classList.toggle('is-hidden', atStart);
+            rightBtn.classList.toggle('is-hidden', atEnd);
+
+            // ✅ NOVO: indicador visual (esmaecido nas bordas) de que há
+            // mais categorias pra ver — funciona em qualquer tela, mas é
+            // especialmente importante no celular, onde as setinhas
+            // ficam escondidas (lá o gesto de arrastar já resolve, mas
+            // sem esmaecimento não dava pra "ver" que tinha mais coisa).
+            bar.classList.toggle('has-more-left', !atStart);
+            bar.classList.toggle('has-more-right', !atEnd);
         };
 
         bar.addEventListener('scroll', update, { passive: true });
@@ -773,8 +801,14 @@ const Products = {
         const favs = this.getFavorites();
         const idx = favs.indexOf(productId);
 
-        if (idx >= 0) favs.splice(idx, 1);
-        else favs.push(productId);
+        if (idx >= 0) {
+            favs.splice(idx, 1);
+        } else {
+            favs.push(productId);
+            // ✅ NOVO: conta como missão de onboarding só quando ADICIONA
+            // (não quando desfavorita).
+            window.APP?.onboarding?.markMission?.('fav');
+        }
 
         Storage.set('favorites', favs);
 
@@ -817,6 +851,7 @@ const Products = {
                         <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 inline-block mt-1">${window.escapeHtml(p.category || 'Outros')}</span>
                         <span class="text-xs text-yellow-400 font-semibold mt-1 block">👤 ${window.escapeHtml(p.profiles?.full_name || 'Desconhecido')}</span>
                         <span class="text-xs text-slate-500 mt-1 block">R$ ${window.formatBRL(p.price)} · 📷 ${(p.product_media || []).length}/${PRODUCT_MEDIA_MAX}</span>
+                        ${p.bulk_min_qty && p.bulk_unit_price ? `<span class="text-xs text-cyan-400 font-semibold mt-1 block">📦 Atacado: ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</span>` : ''}
                         <span class="text-xs ${p.stock > (p.min_stock ?? 5) ? 'text-green-500' : p.stock > 0 ? 'text-yellow-500' : 'text-red-500'} font-black mt-1 block">
                             Estoque: ${p.stock} <span class="text-slate-600 font-normal">(mín: ${p.min_stock ?? 5})</span>
                         </span>
@@ -875,6 +910,7 @@ const Products = {
                         <div class="text-2xl font-black text-white">R$ ${window.formatBRL(p.price)}</div>
                         <div class="text-xs font-bold text-slate-400">Estoque: ${p.stock} <span class="text-slate-600">(mín: ${p.min_stock ?? 5})</span></div>
                     </div>
+                    ${p.bulk_min_qty && p.bulk_unit_price ? `<div class="text-xs text-cyan-400 font-semibold -mt-2">📦 Atacado: ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</div>` : ''}
 
                     <div class="flex gap-2">
                         <button onclick="window.APP.products.editById('${p.id}')" class="flex-1 bg-blue-600 hover:bg-blue-500 py-2 rounded-2xl font-bold text-xs text-white transition-all">
@@ -923,6 +959,11 @@ const Products = {
 
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = 5;
+
+            const bulkMinQtyEl = document.getElementById('p-bulk-min-qty');
+            const bulkUnitPriceEl = document.getElementById('p-bulk-unit-price');
+            if (bulkMinQtyEl) bulkMinQtyEl.value = '';
+            if (bulkUnitPriceEl) bulkUnitPriceEl.value = '';
 
             const categoryEl = document.getElementById('p-category');
             if (categoryEl) categoryEl.value = '';
@@ -989,6 +1030,11 @@ const Products = {
 
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = product.min_stock ?? 5;
+
+            const bulkMinQtyEl = document.getElementById('p-bulk-min-qty');
+            const bulkUnitPriceEl = document.getElementById('p-bulk-unit-price');
+            if (bulkMinQtyEl) bulkMinQtyEl.value = product.bulk_min_qty ?? '';
+            if (bulkUnitPriceEl) bulkUnitPriceEl.value = product.bulk_unit_price ?? '';
 
             const categoryEl = document.getElementById('p-category');
             if (categoryEl) categoryEl.value = product.category || '';
@@ -1173,6 +1219,24 @@ const Products = {
             if (!price || price < 0) throw new Error('Preço deve ser válido');
             if (!category) throw new Error('Selecione uma categoria');
 
+            // ✅ NOVO: preço por atacado — opcional. Se o vendedor
+            // preencher só um dos dois campos, avisa (o banco também
+            // recusaria, mas é melhor avisar aqui antes de tentar salvar).
+            const bulkMinQtyRaw = document.getElementById('p-bulk-min-qty')?.value?.trim();
+            const bulkUnitPriceRaw = document.getElementById('p-bulk-unit-price')?.value?.trim();
+            const bulkMinQty = bulkMinQtyRaw ? parseInt(bulkMinQtyRaw) : null;
+            const bulkUnitPrice = bulkUnitPriceRaw ? parseFloat(bulkUnitPriceRaw) : null;
+
+            if ((bulkMinQty && !bulkUnitPrice) || (!bulkMinQty && bulkUnitPrice)) {
+                throw new Error('Preencha os DOIS campos do preço por atacado (quantidade mínima e preço por unidade), ou deixe os dois em branco');
+            }
+            if (bulkMinQty && bulkMinQty < 2) {
+                throw new Error('A quantidade mínima do preço por atacado precisa ser 2 ou mais');
+            }
+            if (bulkUnitPrice && bulkUnitPrice >= price) {
+                throw new Error('O preço por atacado precisa ser MENOR que o preço normal (senão não é desconto nenhum)');
+            }
+
             // owner_id NÃO entra aqui por padrão. Só é adicionado
             // explicitamente no ramo de CRIAÇÃO (insert), logo abaixo.
             const productData = {
@@ -1182,6 +1246,8 @@ const Products = {
                 cost_price: parseFloat(document.getElementById('p-cost')?.value) || 0,
                 stock: parseInt(document.getElementById('p-stock')?.value) || 0,
                 min_stock: parseInt(document.getElementById('p-min-stock')?.value) || 5,
+                bulk_min_qty: bulkMinQty,
+                bulk_unit_price: bulkUnitPrice,
                 description: document.getElementById('p-desc')?.value?.trim() || '',
                 active: true
             };
@@ -1213,6 +1279,10 @@ const Products = {
 
             log(this.editingId ? '✅ Produto atualizado' : '✅ Produto criado', 'success');
             alert(this.editingId ? '✅ Produto atualizado!' : '✅ Produto criado!');
+
+            // ✅ NOVO: missão de onboarding — só conta na CRIAÇÃO
+            // (edição de um produto já existente não é "o primeiro").
+            if (!this.editingId) window.APP?.onboarding?.markMission?.('product');
 
             this.closeModal();
             await this.fetchAll();

@@ -1278,8 +1278,15 @@ input:checked + .toggle-slider:before {
 #bi-nav-btn,
 #bnav-bi,
 #moderation-nav-btn,
-#bnav-moderation {
+#bnav-moderation,
+#vendor-settings-nav-btn,
+#bnav-vendor-settings {
     position: relative;
+}
+
+#bnav-vendor-settings .sale-badge {
+    top: -2px;
+    right: 14px;
 }
 
 .sale-badge {
@@ -1852,4 +1859,279 @@ video.product-gallery-item {
    setinhas ficam reservadas pra quem usa mouse/trackpad. */
 @media (hover: none) and (pointer: coarse) {
     .category-scroll-arrow { display: none !important; }
+}
+
+/* ✅ NOVO: esmaecimento nas bordas — indica visualmente que existem
+   mais categorias pra ver além do que já está na tela (essencial no
+   celular, onde as setinhas ficam escondidas e o único jeito de saber
+   que "tem mais" era descobrir por acaso arrastando o dedo). As
+   classes has-more-left/has-more-right são ligadas pelo JS conforme a
+   posição da rolagem, então o esmaecimento também some sozinho ao
+   chegar no início/fim de verdade. */
+.category-filter-bar.has-more-right {
+    -webkit-mask-image: linear-gradient(to right, #000, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000, #000 calc(100% - 28px), transparent 100%);
+}
+.category-filter-bar.has-more-left {
+    -webkit-mask-image: linear-gradient(to left, #000, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to left, #000, #000 calc(100% - 28px), transparent 100%);
+}
+.category-filter-bar.has-more-left.has-more-right {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* ----------------------------------------
+   ✅ NOVO: FAIXA DE LEMBRETE — CHAVE PIX
+   Avisa o vendedor (assim que loga) que ele ainda não cadastrou a
+   própria chave Pix, com atalho direto pra tela de cadastro. Fica um
+   degrau abaixo do botão de tema (z-index) pra não tampar ele.
+   ---------------------------------------- */
+.pix-reminder-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 240;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: linear-gradient(90deg, #b45309, #ea580c);
+    color: #fff;
+    padding: 10px 50px 10px 16px;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    transform: translateY(-100%);
+    transition: transform .3s ease;
+}
+.pix-reminder-banner.pix-reminder-show { transform: translateY(0); }
+.pix-reminder-text { max-width: 640px; }
+.pix-reminder-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+#pix-reminder-cta {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-weight: 900;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    padding: 6px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+#pix-reminder-cta:hover { background: rgba(255,255,255,0.25); }
+
+#pix-reminder-dismiss {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.85);
+    font-weight: 900;
+    font-size: 14px;
+    line-height: 1;
+    padding: 4px;
+}
+#pix-reminder-dismiss:hover { color: #fff; }
+
+@media (max-width: 640px) {
+    .pix-reminder-banner { padding: 10px 16px; flex-direction: column; text-align: center; }
+}
+
+/* ----------------------------------------
+   ✅ NOVO: SELO DE PREÇO POR ATACADO
+   Aparece no card do produto quando o vendedor configurou desconto
+   por quantidade mínima.
+   ---------------------------------------- */
+.product-bulk-badge {
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    color: #22d3ee;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 10px;
+    line-height: 1.4;
+}
+
+/* ----------------------------------------
+   ✅ NOVO: TOAST "VOLTOU AO ESTOQUE"
+   Mesma base visual do toast de carrinho/venda, com um acento verde
+   pra reforçar a boa notícia.
+   ---------------------------------------- */
+.restock-toast {
+    border-color: rgba(34, 197, 94, 0.45);
+}
+
+/* ----------------------------------------
+   ✅ NOVO: TUTORIAL PASSO A PASSO (ONBOARDING)
+   ---------------------------------------- */
+.onboarding-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    transition: all .2s ease;
+}
+.onboarding-dot-active {
+    background: var(--community-gradient, #3b82f6);
+    width: 18px;
+    border-radius: 999px;
+}
+
+.onboarding-help-btn {
+    position: fixed;
+    left: 20px;
+    bottom: calc(var(--bottom-nav-height) + 20px);
+    z-index: 150;
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 50%;
+    background: #161b2c;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fbbf24;
+    font-size: 18px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    transition: transform .2s ease, filter .2s ease;
+}
+.onboarding-help-btn:hover { transform: scale(1.08); filter: none; }
+.onboarding-help-btn:active { transform: scale(0.94); }
+
+@media (min-width: 769px) {
+    .onboarding-help-btn { bottom: 24px; }
+}
+
+/* ----------------------------------------
+   ✅ NOVO: CARTÃO DE MISSÕES (gamificação leve)
+   ---------------------------------------- */
+.onboarding-missions-widget {
+    position: fixed;
+    left: 20px;
+    bottom: calc(var(--bottom-nav-height) + 76px);
+    z-index: 150;
+    width: 240px;
+    max-width: calc(100vw - 40px);
+    background: #161b2c;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    overflow: hidden;
+}
+
+@media (min-width: 769px) {
+    .onboarding-missions-widget { bottom: 80px; }
+}
+
+.onboarding-missions-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    background: none;
+    border: none;
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: left;
+}
+.onboarding-missions-close {
+    color: #64748b;
+    font-weight: 900;
+    padding: 2px 4px;
+}
+.onboarding-missions-close:hover { color: #f87171; }
+
+.onboarding-missions-body {
+    padding: 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.onboarding-mission-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.onboarding-mission-item.is-done {
+    color: #4ade80;
+    text-decoration: line-through;
+    text-decoration-color: rgba(74, 222, 128, 0.4);
+}
+.onboarding-mission-check { flex-shrink: 0; }
+
+.onboarding-missions-done {
+    font-size: 11.5px;
+    color: #4ade80;
+    font-weight: 700;
+    text-align: center;
+    padding: 4px 0;
+}
+
+/* ========================================
+   ✅ NOVO: FOLHA DE ESTILO PRÓPRIA PRA IMPRESSÃO
+   Corrige dois problemas de uma vez:
+   1) "7 páginas repetidas" — sem isso, o navegador tentava imprimir a
+      TELA INTEIRA por trás do comprovante (menu lateral, grade de
+      produtos, outros modais), não só o cartão.
+   2) Texto ilegível — o sistema é pensado pra tela ESCURA (texto claro
+      em fundo escuro). No papel branco, esse texto claro seria quase
+      invisível. Aqui, forçamos preto sobre branco só na área marcada
+      com a classe .print-area (o comprovante de compra, por exemplo).
+   Como usar em qualquer novo cartão "imprimível": marque o elemento
+   com class="print-area" e pronto — o resto do app some sozinho.
+   ======================================== */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+
+    .print-area,
+    .print-area * {
+        visibility: visible !important;
+    }
+
+    .print-area {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 16px !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+        background: #ffffff !important;
+    }
+
+    .print-area * {
+        color: #111827 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        border-color: #d1d5db !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
 }

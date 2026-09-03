@@ -1,5 +1,5 @@
 /**
- * AUTH.JS v8.7
+ * AUTH.JS v8.5
  * ✅ Botão de logout mostra avatar, nome, email e role do usuário logado
  * ✅ Bottom nav sincronizado
  * ✅ loginDirect / signupDirect / resetPasswordDirect
@@ -14,22 +14,6 @@
  *    "Sair" — o cartão de perfil ficava "grudado" na tela depois de
  *    desconectar. Agora fecha o modal de perfil e o de login
  *    imediatamente após confirmar o logout.
- * ✅ v8.6 FIX CRÍTICO DE REGRA DE NEGÓCIO: toda conta NOVA estava
- *    nascendo com role='seller' (Vendedor) por padrão — só o e-mail do
- *    Admin Supremo era exceção. Agora toda conta nova nasce 'client' —
- *    comprar nunca exigiu login, login só dá histórico/carrinho/
- *    favoritos, e pra vender de verdade a pessoa precisa ir no cartão
- *    de perfil (botão de conta) e tocar em "🚀 QUERO VENDER".
- * ✅ v8.6 NOVO: "🚀 QUERO VENDER" abre um modal de TERMOS DE
- *    RESPONSABILIDADE DO VENDEDOR — precisa marcar "Li e aceito" antes
- *    do botão de confirmar promover a conta.
- * ✅ v8.7 NOVO: o mesmo modal de "Virar Vendedor" agora também exige a
- *    CHAVE PIX do vendedor (campo obrigatório) — é essa chave que
- *    aparece pro comprador no checkout, dentro do bloco de pagamento
- *    Pix específico desse vendedor (cada vendedor recebe na própria
- *    chave, não mais numa chave única da loja — ver orders.js). A
- *    chave pode ser trocada depois em "Status da Loja" → "Minha Chave
- *    Pix" (vendor-settings.js).
  */
 
 const Auth = {
@@ -60,6 +44,8 @@ const Auth = {
                 this.userId = null;
             }
             this.renderUIByRole();
+            this._checkPixKeyReminder();
+            window.APP?.onboarding?.refreshForRole?.();
             log('✅ Auth inicializado', 'info');
         } catch (err) {
             log(`❌ Erro auth: ${err.message}`, 'error');
@@ -77,25 +63,19 @@ const Auth = {
                 // Perfil não existe — criar
                 const userEmail    = this.session.user.email;
                 const isSuperAdmin = this.SUPREME_ADMINS.includes(userEmail);
-                // ✅ FIX v8.6: toda conta nova nasce 'client' — só o(s)
-                // e-mail(s) da lista SUPREME_ADMINS nascem 'supreme'.
-                // NINGUÉM mais nasce 'seller' automaticamente; pra vender,
-                // a pessoa precisa passar pelo fluxo "QUERO VENDER"
-                // (becomeSeller), que exige aceitar os Termos de
-                // Responsabilidade do Vendedor e cadastrar a chave Pix.
                 const { error: insertError } = await _supabase.from('profiles').insert([{
                     id:        this.session.user.id,
                     email:     userEmail,
                     full_name: this.session.user.user_metadata?.full_name || 'Usuário',
                     phone:     this.session.user.user_metadata?.phone || '',
-                    role:      isSuperAdmin ? 'supreme' : 'client',
+                    role:      isSuperAdmin ? 'supreme' : 'seller',
                     status:    'active'
                 }]);
                 if (insertError) throw insertError;
                 this.profile = {
                     id: this.session.user.id, email: userEmail,
                     full_name: this.session.user.user_metadata?.full_name || 'Usuário',
-                    role: isSuperAdmin ? 'supreme' : 'client', status: 'active'
+                    role: isSuperAdmin ? 'supreme' : 'seller', status: 'active'
                 };
                 this.role = this.profile.role;
                 log(`✅ Perfil criado: ${this.role}`, 'success');
@@ -124,12 +104,12 @@ const Auth = {
 
         // Sidebar — reset
         ['bi-nav-btn','admin-nav-btn','seller-nav-btn','ads-nav-btn','tenants-nav-btn',
-         'ads-requests-nav-btn','vendor-settings-nav-btn'].forEach(hide);
+         'ads-requests-nav-btn','vendor-settings-nav-btn','moderation-nav-btn'].forEach(hide);
         hide('logout-btn');
         show('login-btn');
 
         if (this.role === 'supreme') {
-            ['bi-nav-btn','admin-nav-btn','ads-nav-btn','tenants-nav-btn'].forEach(show);
+            ['bi-nav-btn','admin-nav-btn','ads-nav-btn','tenants-nav-btn','moderation-nav-btn'].forEach(show);
             hide('login-btn');
             show('logout-btn');
             log('👑 UI: ADMIN SUPREMO', 'success');
@@ -197,6 +177,7 @@ const Auth = {
             'bnav-seller':  ['seller', 'supreme'],
             'bnav-ads':     ['supreme'],
             'bnav-tenants': ['supreme'],
+            'bnav-moderation': ['supreme'],
             'bnav-ads-requests':    ['seller'],
             'bnav-vendor-settings': ['seller'],
         };
@@ -239,6 +220,84 @@ const Auth = {
     },
     getUsername() {
         return this.profile?.full_name || this.session?.user?.email || 'Anônimo';
+    },
+
+    // ── LEMBRETE DE CHAVE PIX ────────────────────────────────
+    /**
+     * ✅ NOVO: assim que um vendedor loga (ou vira vendedor agora
+     * mesmo, via becomeSeller()), verifica se ele já cadastrou a
+     * própria chave Pix. Sem ela, a venda acontece do mesmo jeito, mas
+     * o comprador não tem onde pagar direto e precisa chamar o
+     * vendedor no WhatsApp pra combinar — o que atrasa (e às vezes
+     * derruba) a venda. Mostra um selo vermelho no botão "STATUS DA
+     * LOJA" (sidebar + bottom nav) e uma faixa no topo com atalho
+     * direto pro formulário, até a chave ser preenchida.
+     */
+    _checkPixKeyReminder() {
+        if (this.role !== 'seller') {
+            this._togglePixReminderBadge(false);
+            this._hidePixReminderBanner();
+            return;
+        }
+
+        const hasPixKey = !!(this.profile?.pix_key && this.profile.pix_key.trim());
+        this._togglePixReminderBadge(!hasPixKey);
+
+        if (hasPixKey) {
+            this._hidePixReminderBanner();
+            sessionStorage.removeItem('ityrapuan_pix_reminder_dismissed');
+        } else if (sessionStorage.getItem('ityrapuan_pix_reminder_dismissed') !== '1') {
+            this._showPixReminderBanner();
+        }
+    },
+
+    _togglePixReminderBadge(show) {
+        ['vendor-settings-nav-btn', 'bnav-vendor-settings'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            let badge = btn.querySelector('.sale-badge');
+            if (show) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'sale-badge';
+                    badge.textContent = '!';
+                    btn.appendChild(badge);
+                }
+                badge.style.display = 'flex';
+            } else if (badge) {
+                badge.style.display = 'none';
+            }
+        });
+    },
+
+    _showPixReminderBanner() {
+        if (document.getElementById('pix-reminder-banner')) return;
+
+        const banner = document.createElement('div');
+        banner.id = 'pix-reminder-banner';
+        banner.className = 'pix-reminder-banner';
+        banner.innerHTML = `
+            <span class="pix-reminder-text">⚠️ Você ainda não cadastrou sua <strong>chave Pix</strong> — sem ela, o comprador não recebe onde pagar e a venda depende de combinar tudo pelo WhatsApp.</span>
+            <div class="pix-reminder-actions">
+                <button id="pix-reminder-cta" type="button">Cadastrar agora</button>
+                <button id="pix-reminder-dismiss" type="button" aria-label="Fechar">✕</button>
+            </div>
+        `;
+        document.body.appendChild(banner);
+        requestAnimationFrame(() => banner.classList.add('pix-reminder-show'));
+
+        document.getElementById('pix-reminder-cta')?.addEventListener('click', () => {
+            window.APP?.navigation?.showTab('vendor-settings');
+            setTimeout(() => document.getElementById('vendor-pix-key-input')?.focus(), 300);
+        });
+        document.getElementById('pix-reminder-dismiss')?.addEventListener('click', () => {
+            sessionStorage.setItem('ityrapuan_pix_reminder_dismissed', '1');
+            this._hidePixReminderBanner();
+        });
+    },
+
+    _hidePixReminderBanner() {
+        document.getElementById('pix-reminder-banner')?.remove();
     },
 
     // ── Modal Auth ───────────────────────────────────────────
@@ -308,37 +367,9 @@ const Auth = {
         if (window.lucide) lucide.createIcons();
     },
 
-    // ── Termos de Responsabilidade do Vendedor (leitura) ──────
-    openSellerTermsModal() {
-        const modal = document.getElementById('seller-terms-modal');
-        if (modal) modal.classList.remove('hidden');
-    },
-    closeSellerTermsModal() {
-        const modal = document.getElementById('seller-terms-modal');
-        if (modal) modal.classList.add('hidden');
-    },
-
-    // ── Modal de confirmação "QUERO VENDER" (termos + chave Pix) ──
-    openBecomeSellerModal() {
-        const checkbox = document.getElementById('become-seller-accept-terms');
-        if (checkbox) checkbox.checked = false;
-        // ✅ NOVO (v8.7): limpa o campo de chave Pix toda vez que o
-        // modal abre, pra não herdar texto de uma tentativa anterior.
-        const pixInput = document.getElementById('become-seller-pix-key');
-        if (pixInput) pixInput.value = '';
-        const modal = document.getElementById('become-seller-modal');
-        if (modal) modal.classList.remove('hidden');
-    },
-    closeBecomeSellerModal() {
-        const modal = document.getElementById('become-seller-modal');
-        if (modal) modal.classList.add('hidden');
-    },
-
     /**
-     * Só ABRE o modal de confirmação (termos + chave Pix) — quem
-     * promove de verdade a conta é confirmBecomeSeller(), chamada só
-     * depois da pessoa preencher a chave Pix, marcar "Li e aceito" e
-     * tocar em "Confirmar e Virar Vendedor".
+     * Promove a PRÓPRIA conta de 'client' para 'seller'. Só funciona pra
+     * quem está logado como Cliente.
      */
     async becomeSeller() {
         if (!this.session || !this.userId) {
@@ -351,54 +382,27 @@ const Auth = {
             return;
         }
 
-        this.openBecomeSellerModal();
-    },
-
-    /**
-     * ✅ v8.7: promove a PRÓPRIA conta de 'client' para 'seller' — só
-     * executa se (1) o checkbox de aceite dos Termos de Responsabilidade
-     * do Vendedor estiver marcado E (2) a chave Pix tiver sido
-     * preenchida. Salva role E pix_key no mesmo UPDATE. Chamada pelo
-     * botão "✓ Confirmar e Virar Vendedor" dentro do modal aberto por
-     * becomeSeller().
-     */
-    async confirmBecomeSeller() {
-        const checkbox = document.getElementById('become-seller-accept-terms');
-        if (!checkbox || !checkbox.checked) {
-            alert('❌ Você precisa marcar "Li e aceito os Termos de Responsabilidade do Vendedor" antes de continuar.');
-            return;
-        }
-
-        const pixInput = document.getElementById('become-seller-pix-key');
-        const pixKey = pixInput?.value?.trim();
-        if (!pixKey) {
-            alert('❌ Informe sua chave Pix (CPF/CNPJ, e-mail, telefone ou chave aleatória) — é nela que você vai receber dos compradores.');
-            pixInput?.focus();
-            return;
-        }
-
-        if (!this.session || !this.userId) {
-            alert('❌ Você precisa estar logado');
-            return;
-        }
+        if (!confirm('Deseja se tornar um Vendedor?\n\nVocê passará a poder cadastrar produtos, gerenciar estoque e ver seu próprio painel de BI.')) return;
 
         try {
             const { error } = await _supabase
                 .from('profiles')
-                .update({ role: 'seller', pix_key: pixKey })
+                .update({ role: 'seller' })
                 .eq('id', this.userId);
 
             if (error) throw error;
 
             log('✅ Conta promovida a vendedor', 'success');
-
-            this.closeBecomeSellerModal();
             alert('✅ Pronto! Agora você é um vendedor.');
 
             this.closeProfileModal();
             await this.init(); // recarrega perfil/role e re-renderiza a navegação
 
             window.APP?.navigation?.showTab('seller');
+
+            // ✅ NOVO: mostra o tour de vendedor(a) na hora — ela acabou
+            // de ganhar um painel novo, é o melhor momento de explicar.
+            window.APP?.onboarding?.startSellerTour(true);
         } catch (err) {
             log(`❌ Erro ao virar vendedor: ${err.message}`, 'error');
             alert(`❌ Erro: ${err.message}\n\nSe o erro persistir, pode ser uma regra de segurança do banco (RLS) bloqueando essa troca — fale com o Admin Supremo.`);
@@ -519,10 +523,9 @@ const Auth = {
             // ✅ NOVO (v8.5): fecha qualquer modal que tenha ficado aberto
             this.closeProfileModal();
             this.closeAuthModal();
-            this.closeBecomeSellerModal();
-            this.closeSellerTermsModal();
 
             this.renderUIByRole();
+            this._checkPixKeyReminder();
             window.APP?.navigation?.showTab('market');
             alert('✅ Você foi desconectado');
         } catch (err) {
