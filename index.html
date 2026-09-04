@@ -68,7 +68,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=12">
 
     <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
          (26KB), gerado escaneando todo o projeto — no lugar do script
@@ -571,7 +571,7 @@
             <button class="mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 px-6 rounded-2xl transition-all" data-action="open-product-modal">
                 ➕ NOVO PRODUTO
             </button>
-            <div id="admin-list" class="space-y-3"></div>
+            <div id="admin-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
         </section>
 
         <!-- ===== SELLER PANEL (ESTOQUE) ===== -->
@@ -1007,6 +1007,56 @@
     </div>
 
     <!-- ========================================
+         ✅ NOVO: MODAL DE PRÉ-VISUALIZAÇÃO DO PRODUTO (Admin/Estoque)
+         Aberto pelo botão 👁️ no cartão de cada produto — mostra a
+         foto/vídeo em tamanho grande e os dados, sem entrar no modo
+         de edição.
+         ======================================== -->
+    <div id="product-preview-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+        <div class="bg-[#161b2c] rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="preview-media-wrap">
+                <img id="preview-media-img" src="" alt="" class="preview-media-img hidden">
+                <video id="preview-media-video" class="preview-media-video hidden" controls></video>
+                <div id="preview-media-empty" class="preview-media-empty">SEM IMAGEM</div>
+
+                <button type="button" onclick="window.APP.products._previewStep(-1)" id="preview-media-prev" class="preview-nav-btn preview-nav-prev hidden" aria-label="Foto/vídeo anterior">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <button type="button" onclick="window.APP.products._previewStep(1)" id="preview-media-next" class="preview-nav-btn preview-nav-next hidden" aria-label="Próxima foto/vídeo">
+                    <i data-lucide="chevron-right"></i>
+                </button>
+                <span id="preview-media-counter" class="preview-media-counter hidden"></span>
+
+                <button type="button" onclick="window.APP.products.closePreview()" class="preview-close-btn" aria-label="Fechar">✕</button>
+            </div>
+
+            <div class="p-6">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <span id="preview-category" class="text-[10px] font-black uppercase px-2 py-1 rounded-full bg-blue-500/15 text-blue-300">Categoria</span>
+                    <span id="preview-stock" class="text-xs font-black"></span>
+                </div>
+                <h3 id="preview-name" class="text-xl font-bold text-white mb-1">Nome do produto</h3>
+                <p id="preview-vendor" class="text-xs text-yellow-400 font-semibold mb-3">👤 Vendedor</p>
+                <p id="preview-desc" class="text-slate-400 text-sm leading-relaxed mb-4">Descrição do produto.</p>
+
+                <div class="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 mb-2">
+                    <span class="text-2xl font-black text-white" id="preview-price">R$ 0,00</span>
+                </div>
+                <div id="preview-bulk" class="text-xs text-cyan-400 font-semibold mb-4"></div>
+
+                <div class="flex gap-2">
+                    <button type="button" id="preview-edit-btn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-2xl transition-all">
+                        ✏️ EDITAR
+                    </button>
+                    <button type="button" onclick="window.APP.products.closePreview()" class="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-black py-3 rounded-2xl transition-all">
+                        FECHAR
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================
          CUSTOMER CHECKOUT MODAL
          ======================================== -->
     <div id="customer-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
@@ -1051,12 +1101,12 @@
     <script src="auth.js?v=9"></script>
     <script src="store-status.js?v=2"></script>
     <script src="cart.js?v=4"></script>
-    <script src="products.js?v=10"></script>
+    <script src="products.js?v=11"></script>
     <script src="ads.js?v=6"></script>
     <script src="bi.js?v=9"></script>
     <script src="navigation.js?v=5"></script>
     <script src="tenants.js?v=6"></script>
-    <script src="orders.js?v=7"></script>
+    <script src="orders.js?v=8"></script>
     <script src="order-management.js?v=2"></script>
     <script src="admin-warnings.js?v=2"></script>
     <script src="vendor-settings.js?v=6"></script>

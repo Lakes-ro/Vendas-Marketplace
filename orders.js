@@ -124,6 +124,52 @@ const Orders = {
         return Object.values(groups);
     },
 
+    /**
+     * ✅ NOVO: create_order() agora devolve, junto do motivo da recusa,
+     * o ID do produto (e a quantidade que ainda resta, quando o motivo
+     * é falta de estoque) — em vez de um "não está disponível" genérico
+     * que obrigava o cliente a adivinhar QUAL item do carrinho era e
+     * POR QUÊ. Aqui a gente casa esse ID com o nome já conhecido no
+     * carrinho e monta uma mensagem específica e acionável.
+     * ⚠️ Requer a migração `create_order_detailed_errors.sql` aplicada
+     * no banco — sem ela, o RPC ainda manda só o motivo (sem ID), e o
+     * fallback abaixo mantém a mensagem antiga (genérica, mas correta).
+     */
+    _buildCheckoutErrorMessage(err, cartItems) {
+        const raw = err?.message || '';
+
+        const match = raw.match(/^(product_not_found|vendor_banned|vendor_offline|insufficient_stock):([0-9a-fA-F-]{36})(?::(\d+))?/);
+
+        if (match) {
+            const [, reason, productId, extra] = match;
+            const cartItem = (cartItems || []).find(i => i.id === productId);
+            const productLabel = cartItem?.name ? `"${cartItem.name}"` : 'Um dos produtos do seu carrinho';
+            const restam = extra !== undefined ? parseInt(extra, 10) : 0;
+
+            const messages = {
+                product_not_found: `❌ ${productLabel} não está mais disponível — ele foi removido ou bloqueado pelo vendedor/administração.\n\nRemova-o do carrinho e atualize a página antes de tentar de novo.`,
+                vendor_banned: `❌ ${productLabel} não pôde ser comprado: o vendedor responsável está indisponível no momento.`,
+                vendor_offline: `🔌 ${productLabel} não pôde ser comprado: o vendedor está temporariamente offline. Tente novamente mais tarde.`,
+                insufficient_stock: restam > 0
+                    ? `📦 ${productLabel} não tem mais estoque suficiente — restam apenas ${restam} unidade${restam === 1 ? '' : 's'}.\n\nAjuste a quantidade no carrinho e tente de novo.`
+                    : `📦 ${productLabel} acabou de ficar sem estoque.\n\nRemova-o do carrinho e tente de novo.`
+            };
+
+            return messages[reason] || `❌ Erro na compra:\n${raw}\n\nTente novamente`;
+        }
+
+        // Fallback (migração ainda não aplicada, ou erro sem ID de produto)
+        const friendlyMessages = {
+            store_closed: '🔒 A loja está fechada no momento (horário de funcionamento, Sabbath, ou fechamento manual). Tente novamente mais tarde.',
+            empty_cart: '❌ Seu carrinho está vazio.',
+            product_not_found: '❌ Um dos produtos do carrinho não está mais disponível. Atualize a página e tente de novo.',
+            vendor_banned: '❌ Um dos vendedores deste pedido está indisponível no momento.',
+            vendor_offline: '🔌 Um dos vendedores deste pedido está temporariamente offline. Tente novamente mais tarde.'
+        };
+        const msgKey = Object.keys(friendlyMessages).find(k => raw.includes(k));
+        return msgKey ? friendlyMessages[msgKey] : `❌ Erro na compra:\n${raw}\n\nTente novamente`;
+    },
+
     // ✅ v5.0 FIX CRÍTICO (mantido de versões anteriores): checkout
     // continua indo 100% pela função create_order() (RPC SECURITY
     // DEFINER: valida loja aberta, vendedor online, estoque, e calcula
@@ -238,18 +284,7 @@ const Orders = {
 
         } catch (err) {
             log(`❌ Erro no checkout: ${err.message}`, 'error');
-
-            // ✅ create_order() sinaliza problemas de negócio com mensagens
-            // específicas (RAISE EXCEPTION) — traduz pra algo amigável.
-            const friendlyMessages = {
-                store_closed: '🔒 A loja está fechada no momento (horário de funcionamento, Sabbath, ou fechamento manual). Tente novamente mais tarde.',
-                empty_cart: '❌ Seu carrinho está vazio.',
-                product_not_found: '❌ Um dos produtos do carrinho não está mais disponível. Atualize a página e tente de novo.',
-                vendor_banned: '❌ Um dos vendedores deste pedido está indisponível no momento.',
-                vendor_offline: '🔌 Um dos vendedores deste pedido está temporariamente offline. Tente novamente mais tarde.'
-            };
-            const msgKey = Object.keys(friendlyMessages).find(k => (err.message || '').includes(k));
-            alert(msgKey ? friendlyMessages[msgKey] : `❌ Erro na compra:\n${err.message}\n\nTente novamente`);
+            alert(this._buildCheckoutErrorMessage(err, items));
         } finally {
             if (btn) {
                 btn.disabled = false;

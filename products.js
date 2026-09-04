@@ -92,6 +92,11 @@ const Products = {
 
     _mediaState: { existing: [], newFiles: [], removedIds: [] },
 
+    // ✅ NOVO: estado do modal de pré-visualização (Admin/Estoque) —
+    // galeria de fotos/vídeos do produto sendo visualizado no momento.
+    _previewMedia: [],
+    _previewIndex: 0,
+
     CATEGORY_ICONS: {
         'Todas': '🏬',
         'Alimentos': '🍎',
@@ -840,32 +845,56 @@ const Products = {
             }
 
             if (!filtrado || filtrado.length === 0) {
-                list.innerHTML = '<div class="text-slate-600 text-center py-8">Nenhum produto</div>';
+                list.innerHTML = '<div class="col-span-full text-slate-600 text-center py-8">Nenhum produto</div>';
                 return;
             }
 
-            list.innerHTML = filtrado.map(p => `
-                <div class="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-white/5 hover:border-blue-500/30 transition-all">
-                    <div class="flex-1">
-                        <span class="font-bold text-white block">${window.escapeHtml(p.name)}</span>
-                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 inline-block mt-1">${window.escapeHtml(p.category || 'Outros')}</span>
-                        <span class="text-xs text-yellow-400 font-semibold mt-1 block">👤 ${window.escapeHtml(p.profiles?.full_name || 'Desconhecido')}</span>
-                        <span class="text-xs text-slate-500 mt-1 block">R$ ${window.formatBRL(p.price)} · 📷 ${(p.product_media || []).length}/${PRODUCT_MEDIA_MAX}</span>
-                        ${p.bulk_min_qty && p.bulk_unit_price ? `<span class="text-xs text-cyan-400 font-semibold mt-1 block">📦 Atacado: ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</span>` : ''}
-                        <span class="text-xs ${p.stock > (p.min_stock ?? 5) ? 'text-green-500' : p.stock > 0 ? 'text-yellow-500' : 'text-red-500'} font-black mt-1 block">
-                            Estoque: ${p.stock} <span class="text-slate-600 font-normal">(mín: ${p.min_stock ?? 5})</span>
-                        </span>
+            // ✅ NOVO: cartão compacto com miniatura da foto — cabem bem
+            // mais produtos na tela de uma vez (grid, não lista empilhada),
+            // e o botão 👁️ abre uma pré-visualização rápida (foto grande
+            // + todos os dados) sem precisar entrar no modo de edição.
+            list.innerHTML = filtrado.map(p => {
+                const thumbUrl = p.image_url || (p.product_media || [])[0]?.media_url || '';
+                const thumb = thumbUrl
+                    ? `<img src="${thumbUrl}" alt="${window.escapeHtml(p.name)}" class="admin-card-thumb" loading="lazy" onerror="if(!this.dataset.err){this.dataset.err=1;this.src=PRODUCT_PLACEHOLDER}">`
+                    : `<div class="admin-card-thumb admin-card-thumb-empty">SEM<br>IMAGEM</div>`;
+
+                const stock = p.stock || 0;
+                const minStock = p.min_stock ?? 5;
+                const stockColor = stock > minStock ? 'text-green-500' : stock > 0 ? 'text-yellow-500' : 'text-red-500';
+
+                return `
+                    <div class="admin-card">
+                        <div class="admin-card-top">
+                            ${thumb}
+                            <div class="admin-card-info">
+                                <span class="admin-card-name" title="${window.escapeHtml(p.name)}">${window.escapeHtml(p.name)}</span>
+                                <span class="admin-card-badge">${window.escapeHtml(p.category || 'Outros')}</span>
+                                <span class="admin-card-vendor" title="${window.escapeHtml(p.profiles?.full_name || 'Desconhecido')}">👤 ${window.escapeHtml(p.profiles?.full_name || 'Desconhecido')}</span>
+                            </div>
+                        </div>
+
+                        <div class="admin-card-meta">
+                            <span class="admin-card-price">R$ ${window.formatBRL(p.price)}</span>
+                            <span class="admin-card-stock ${stockColor}">Estoque: ${stock} <span class="text-slate-600 font-normal">(mín: ${minStock})</span></span>
+                        </div>
+
+                        ${p.bulk_min_qty && p.bulk_unit_price ? `<div class="admin-card-bulk">📦 ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</div>` : ''}
+
+                        <div class="admin-card-actions">
+                            <button onclick="window.APP.products.previewById('${p.id}')" class="admin-card-btn admin-card-btn-view" title="Visualizar">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="window.APP.products.editById('${p.id}')" class="admin-card-btn admin-card-btn-edit" title="Editar">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="window.APP.products.delete('${p.id}')" class="admin-card-btn admin-card-btn-delete" title="Deletar">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="window.APP.products.editById('${p.id}')" class="text-blue-500 p-2 hover:bg-blue-500/10 rounded-lg transition-all">
-                            <i data-lucide="edit-3" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="window.APP.products.delete('${p.id}')" class="text-red-500 p-2 hover:bg-red-500/10 rounded-lg transition-all">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             if (window.lucide) lucide.createIcons();
             log('✅ Admin list renderizado', 'success');
@@ -1006,6 +1035,124 @@ const Products = {
         const product = this.manageProducts.find(p => p.id === productId);
         if (!product) { alert('❌ Produto não encontrado'); return; }
         this.edit(product);
+    },
+
+    /**
+     * ✅ NOVO: abre o modal de pré-visualização (só leitura) — o botão
+     * 👁️ no painel Admin/Estoque, pra conferir rapidamente as fotos e
+     * os dados de um produto sem precisar entrar no modo de edição.
+     */
+    previewById(productId) {
+        const product = this.manageProducts.find(p => p.id === productId);
+        if (!product) { alert('❌ Produto não encontrado'); return; }
+        this.openPreview(product);
+    },
+
+    openPreview(product) {
+        this._previewMedia = (product.product_media || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+        this._previewIndex = 0;
+
+        const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+        set('preview-category', product.category || 'Outros');
+        set('preview-name', product.name || 'Sem nome');
+        set('preview-vendor', `👤 ${product.profiles?.full_name || 'Desconhecido'}`);
+        set('preview-desc', product.description || 'Sem descrição.');
+        set('preview-price', `R$ ${window.formatBRL(product.price)}`);
+
+        const stock = product.stock || 0;
+        const minStock = product.min_stock ?? 5;
+        const stockEl = document.getElementById('preview-stock');
+        if (stockEl) {
+            stockEl.textContent = `Estoque: ${stock} (mín: ${minStock})`;
+            stockEl.className = `text-xs font-black ${stock > minStock ? 'text-green-500' : stock > 0 ? 'text-yellow-500' : 'text-red-500'}`;
+        }
+
+        const bulkEl = document.getElementById('preview-bulk');
+        if (bulkEl) {
+            bulkEl.textContent = (product.bulk_min_qty && product.bulk_unit_price)
+                ? `📦 Atacado: ${product.bulk_min_qty}+ un. = R$ ${window.formatBRL(product.bulk_unit_price)} cada`
+                : '';
+        }
+
+        // O botão "Editar" do preview leva direto pro modo de edição
+        // desse mesmo produto, fechando o preview antes.
+        const editBtn = document.getElementById('preview-edit-btn');
+        if (editBtn) {
+            editBtn.onclick = () => {
+                this.closePreview();
+                this.editById(product.id);
+            };
+        }
+
+        this._renderPreviewMedia();
+
+        document.getElementById('product-preview-modal')?.classList.remove('hidden');
+        if (window.lucide) lucide.createIcons();
+    },
+
+    closePreview() {
+        document.getElementById('product-preview-modal')?.classList.add('hidden');
+        const video = document.getElementById('preview-media-video');
+        if (video) video.pause?.();
+    },
+
+    /**
+     * Desenha a foto/vídeo atual da galeria do produto em preview,
+     * junto com as setas ◀ ▶ e o contador (1/3, 2/3...) — só aparecem
+     * quando o produto tem mais de uma foto/vídeo cadastrado.
+     */
+    _renderPreviewMedia() {
+        const img = document.getElementById('preview-media-img');
+        const video = document.getElementById('preview-media-video');
+        const empty = document.getElementById('preview-media-empty');
+        const prevBtn = document.getElementById('preview-media-prev');
+        const nextBtn = document.getElementById('preview-media-next');
+        const counter = document.getElementById('preview-media-counter');
+        if (!img || !video || !empty || !prevBtn || !nextBtn || !counter) return;
+
+        const media = this._previewMedia;
+        const total = media.length;
+
+        video.pause?.();
+
+        if (!total) {
+            img.classList.add('hidden');
+            video.classList.add('hidden');
+            empty.classList.remove('hidden');
+            prevBtn.classList.add('hidden');
+            nextBtn.classList.add('hidden');
+            counter.classList.add('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+        const current = media[this._previewIndex];
+
+        if (current.media_type === 'video') {
+            img.classList.add('hidden');
+            video.classList.remove('hidden');
+            video.src = current.media_url;
+        } else {
+            video.classList.add('hidden');
+            img.classList.remove('hidden');
+            img.dataset.err = '';
+            img.onerror = () => { if (!img.dataset.err) { img.dataset.err = '1'; img.src = PRODUCT_PLACEHOLDER; } };
+            img.src = current.media_url;
+        }
+
+        const showControls = total > 1;
+        prevBtn.classList.toggle('hidden', !showControls);
+        nextBtn.classList.toggle('hidden', !showControls);
+        counter.classList.toggle('hidden', !showControls);
+        counter.textContent = `${this._previewIndex + 1}/${total}`;
+    },
+
+    _previewStep(direction) {
+        const total = this._previewMedia.length;
+        if (!total) return;
+        this._previewIndex = (this._previewIndex + direction + total) % total;
+        this._renderPreviewMedia();
     },
 
     edit(product) {
