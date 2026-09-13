@@ -82,6 +82,17 @@ const Products = {
     manageProducts: [],  // ✅ Admin/Estoque — lista própria, sempre completa
 
     activeCategory: 'Todas',
+
+    // ✅ NOVO: categorias "de verdade" — começa com as fixas (ícones
+    // conhecidos) e ganha qualquer categoria nova criada por algum
+    // vendedor, buscada 1x do banco (_loadAllCategories). A barra de
+    // filtro da vitrine usa essa lista, não mais só as fixas.
+    _allCategories: [],
+
+    // ✅ NOVO: faixas de preço por atacado sendo editadas no formulário
+    // (Admin/Estoque) — array de {min_qty, unit_price}, quantas a
+    // pessoa quiser adicionar com o botão "+".
+    _bulkTiers: [],
     searchQuery: '',
     showFavoritesOnly: false,
 
@@ -205,6 +216,15 @@ const Products = {
 
         this._page = 0;
         this._hasMore = true;
+
+        // ✅ NOVO: categorias reais (fixas + qualquer categoria nova
+        // criada por algum vendedor) — carrega em paralelo com a
+        // primeira página; assim que chegar, redesenha só a barra de
+        // filtro (não trava a exibição dos produtos esperando isso).
+        if (!this._allCategories.length) {
+            this._loadAllCategories().then(() => this._renderCategoryFilterBar());
+        }
+
         await this._fetchStorefrontPage(true);
     },
 
@@ -252,7 +272,8 @@ const Products = {
                 // motivo pra uma esperar a outra.
                 await Promise.all([
                     this._attachVendorOnlineStatus(this.products),
-                    this._attachMedia(this.products)
+                    this._attachMedia(this.products),
+                    this._attachBulkTiers(this.products)
                 ]);
                 this.render();
                 return;
@@ -286,7 +307,8 @@ const Products = {
             // ✅ v5.2 PERFORMANCE: idem — em paralelo.
             await Promise.all([
                 this._attachVendorOnlineStatus(page),
-                this._attachMedia(page)
+                this._attachMedia(page),
+                this._attachBulkTiers(page)
             ]);
             this.render();
         } catch (err) {
@@ -337,13 +359,100 @@ const Products = {
             // ✅ v5.2 PERFORMANCE: idem — em paralelo.
             await Promise.all([
                 this._attachVendorOnlineStatus(this.manageProducts),
-                this._attachMedia(this.manageProducts)
+                this._attachMedia(this.manageProducts),
+                this._attachBulkTiers(this.manageProducts)
             ]);
 
             this.renderAdmin();
             if (role === 'seller') this.renderSeller();
         } catch (err) {
             log(`❌ Erro ao carregar produtos para gestão: ${err.message}`, 'error');
+        }
+    },
+
+    /**
+     * Busca o status online/offline de cada vendedor dono dos produtos
+     * da LISTA passada, e anexa `p.vendor_online` em cada item dela.
+     * Produto sem linha em vendor_status é tratado como disponível
+     * (mesmo padrão do banco: is_online default = true).
+     */
+    /**
+     * ✅ NOVO: busca as faixas de preço por atacado (product_bulk_tiers)
+     * numa consulta separada — mesmo padrão do _attachMedia() acima,
+     * pelo mesmo motivo (evita depender do cache de schema do
+     * PostgREST já ter "percebido" a tabela nova).
+     */
+    async _attachBulkTiers(list) {
+        if (!list || !list.length) return;
+        try {
+            const ids = list.map(p => p.id);
+            const { data, error } = await _supabase
+                .from('product_bulk_tiers')
+                .select('id, product_id, min_qty, unit_price')
+                .in('product_id', ids)
+                .order('min_qty', { ascending: true });
+
+            if (error) throw error;
+
+            const byProduct = {};
+            (data || []).forEach(t => {
+                (byProduct[t.product_id] = byProduct[t.product_id] || []).push(t);
+            });
+
+            list.forEach(p => { p.bulk_tiers = byProduct[p.id] || []; });
+        } catch (err) {
+            log(`⚠️ Não foi possível carregar faixas de atacado: ${err.message}`, 'warning');
+            list.forEach(p => { if (!p.bulk_tiers) p.bulk_tiers = []; });
+        }
+    },
+
+    /**
+     * ✅ NOVO: devolve, pra um produto, a lista de faixas de atacado já
+     * pronta pra exibir/usar — prioriza a tabela nova (product_bulk_tiers,
+     * várias faixas); se estiver vazia, cai pro par de colunas antigo
+     * (bulk_min_qty/bulk_unit_price, uma faixa só) — assim produtos
+     * cadastrados antes dessa atualização continuam mostrando o desconto
+     * deles normalmente.
+     */
+    _resolveBulkTiers(product) {
+        if (product?.bulk_tiers && product.bulk_tiers.length) return product.bulk_tiers;
+        if (product?.bulk_min_qty && product?.bulk_unit_price) {
+            return [{ min_qty: product.bulk_min_qty, unit_price: product.bulk_unit_price }];
+        }
+        return [];
+    },
+
+    /**
+     * ✅ NOVO: busca todas as categorias "de verdade" já em uso no
+     * catálogo (produtos ativos) e junta com as fixas (que já têm
+     * ícone) — assim uma categoria criada por qualquer vendedor passa
+     * a aparecer na barra de filtro da vitrine e no formulário de
+     * outros produtos, mesmo sem ícone próprio (usa 📦 padrão).
+     */
+    async _loadAllCategories() {
+        try {
+            const { data, error } = await _supabase
+                .from('products')
+                .select('category')
+                .eq('active', true)
+                .not('category', 'is', null);
+
+            if (error) throw error;
+
+            const fixed = Object.keys(this.CATEGORY_ICONS).filter(c => c !== 'Todas');
+            const merged = [...fixed];
+
+            (data || []).forEach(row => {
+                const cat = (row.category || '').trim();
+                if (cat && !merged.includes(cat)) merged.push(cat);
+            });
+
+            this._allCategories = merged;
+        } catch (err) {
+            log(`⚠️ Não foi possível carregar categorias: ${err.message}`, 'warning');
+            if (!this._allCategories.length) {
+                this._allCategories = Object.keys(this.CATEGORY_ICONS).filter(c => c !== 'Todas');
+            }
         }
     },
 
@@ -517,15 +626,17 @@ const Products = {
         const badges = `${isNew ? '<span class="product-badge badge-new">🆕 Novidade</span>' : ''}${isUrgent ? `<span class="product-badge badge-urgent">🔥 Só ${estoque} restam</span>` : ''}`;
         const soldBadge = sold > 0 ? `<span class="product-sold-count">🛍️ ${sold} vendido${sold > 1 ? 's' : ''}</span>` : '';
 
-        // ✅ NOVO: preço por atacado — se o produto tem desconto configurado
-        // pro vendedor, mostra o aviso na vitrine ("compre X ou mais e cada
-        // unidade sai por R$Y"). O valor cobrado de verdade é sempre
-        // recalculado no banco (create_order), então esse selo é só o
-        // reflexo do que já vale de fato.
-        const hasBulkPricing = !!(p.bulk_min_qty && p.bulk_unit_price);
-        const bulkBadge = hasBulkPricing ? `
+        // ✅ MELHORADO: texto do selo de atacado — antes ficava
+        // espremido numa linha só ("Compre 4+ e pague R$2,50 cada"),
+        // agora vira um título + "pilulas" por faixa, e já suporta
+        // QUANTAS faixas o vendedor cadastrar (não só uma).
+        const bulkTiers = this._resolveBulkTiers(p);
+        const bulkBadge = bulkTiers.length ? `
             <div class="product-bulk-badge">
-                📦 Compre <strong>${p.bulk_min_qty}+</strong> e pague <strong>R$ ${window.formatBRL(p.bulk_unit_price)}</strong> cada
+                <div class="product-bulk-badge-title">📦 Desconto por quantidade</div>
+                <div class="product-bulk-badge-tiers">
+                    ${bulkTiers.map(t => `<span class="product-bulk-tier-pill">${t.min_qty}+ un. <strong>R$ ${window.formatBRL(t.unit_price)}</strong></span>`).join('')}
+                </div>
             </div>
         ` : '';
 
@@ -579,8 +690,7 @@ const Products = {
                     data-id="${p.id}"
                     data-name="${nome}"
                     data-price="${p.price}"
-                    data-bulk-min-qty="${p.bulk_min_qty || ''}"
-                    data-bulk-unit-price="${p.bulk_unit_price || ''}"
+                    data-bulk-tiers='${JSON.stringify(bulkTiers).replace(/'/g, "&#39;")}'
                     class="bg-blue-600 py-4 rounded-2xl font-black text-xs uppercase text-white hover:bg-blue-500 transition-all ${!disponivel ? 'opacity-50 cursor-not-allowed' : ''}"
                     ${!disponivel ? 'disabled' : ''}>
                     Adicionar ao Carrinho
@@ -612,7 +722,7 @@ const Products = {
             ? `<div class="product-gallery-dots">${media.map((_, i) => `<span class="product-gallery-dot ${i === 0 ? 'active' : ''}"></span>`).join('')}</div>`
             : '';
 
-        return `<div class="product-gallery"><div class="product-gallery-track">${slides}</div>${dots}</div>`;
+        return `<div class="product-gallery" data-product-id="${p.id}"><div class="product-gallery-track">${slides}</div>${dots}</div>`;
     },
 
     /**
@@ -638,6 +748,78 @@ const Products = {
 
             slides.forEach(s => observer.observe(s));
         });
+
+        // ✅ NOVO: arrastar com o mouse (clicar e arrastar pros lados)
+        // — antes só dava pra passar as fotos pelo dedo (toque). Agora
+        // funciona igual num PC/notebook também.
+        this._bindGalleryDrag();
+    },
+
+    /**
+     * ✅ NOVO: permite passar as fotos/vídeos da galeria clicando e
+     * arrastando com o mouse — a rolagem por toque (dedo) já funcionava
+     * sozinha (scroll nativo do navegador), mas no computador não tem
+     * "dedo": sem isso, só dava pra rolar usando a rodinha do mouse com
+     * Shift, ou a barra de rolagem (nada intuitivo). Cada galeria só é
+     * amarrada uma vez (dataset.dragBound), mesmo que a vitrine
+     * re-renderize os cards depois.
+     */
+    _bindGalleryDrag() {
+        document.querySelectorAll('.product-gallery-track').forEach(track => {
+            if (track.dataset.dragBound) return;
+            track.dataset.dragBound = '1';
+
+            let isDown = false;
+            let startX = 0;
+            let scrollStart = 0;
+            let moved = false;
+
+            const start = (clientX) => {
+                isDown = true;
+                moved = false;
+                startX = clientX;
+                scrollStart = track.scrollLeft;
+                track.classList.add('is-dragging');
+            };
+
+            const move = (clientX) => {
+                if (!isDown) return;
+                if (Math.abs(clientX - startX) > 6) moved = true;
+                track.scrollLeft = scrollStart - (clientX - startX);
+            };
+
+            const end = () => {
+                if (!isDown) return;
+                isDown = false;
+                track.classList.remove('is-dragging');
+            };
+
+            // Mouse (PC/notebook)
+            track.addEventListener('mousedown', (e) => {
+                start(e.pageX);
+                e.preventDefault(); // evita selecionar texto/imagem ao arrastar
+            });
+            window.addEventListener('mousemove', (e) => move(e.pageX));
+            window.addEventListener('mouseup', end);
+            track.addEventListener('mouseleave', end);
+
+            // Toque — reforça o mesmo comportamento (o scroll nativo já
+            // funcionava, isso só deixa consistente com o mouse).
+            track.addEventListener('touchstart', (e) => start(e.touches[0].pageX), { passive: true });
+            track.addEventListener('touchmove', (e) => move(e.touches[0].pageX), { passive: true });
+            track.addEventListener('touchend', end);
+
+            // ✅ NOVO: clique (sem ter arrastado) na foto abre ela em
+            // tamanho grande — igual funciona nos anúncios.
+            track.addEventListener('click', (e) => {
+                if (moved) { moved = false; return; }
+                if (e.target.tagName === 'VIDEO') return; // deixa os controles do vídeo funcionarem normal
+                const productId = track.closest('.product-gallery')?.dataset.productId;
+                if (!productId) return;
+                const index = track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
+                this.previewById(productId, index);
+            });
+        });
     },
 
     /**
@@ -650,14 +832,16 @@ const Products = {
         const bar = document.getElementById('category-filter-bar');
         if (!bar) return;
 
-        // ✅ FIX: antes a lista de categorias era calculada a partir dos
-        // produtos JÁ CARREGADOS na tela — com a vitrine agora paginada
-        // (rolagem infinita), uma categoria sem nenhum produto entre os
-        // mais recentes simplesmente sumia do filtro, mesmo tendo
-        // produtos mais pra frente no catálogo. As categorias são um
-        // conjunto fixo (mesmo do formulário de cadastro), então usa
-        // sempre a lista completa — nunca depende do que já carregou.
-        const categorias = ['Todas', ...Object.keys(this.CATEGORY_ICONS).filter(c => c !== 'Todas')];
+        // ✅ FIX (mantido): a lista nunca depende só do que já carregou
+        // na tela (rolagem infinita) — sempre usa a lista completa.
+        // ✅ NOVO: essa lista completa agora vem de _allCategories
+        // (fixas + qualquer categoria nova criada por um vendedor),
+        // carregada 1x do banco em _loadAllCategories(). Enquanto ainda
+        // não carregou, cai nas fixas (evita a barra ficar vazia).
+        const baseCategorias = this._allCategories.length
+            ? this._allCategories
+            : Object.keys(this.CATEGORY_ICONS).filter(c => c !== 'Todas');
+        const categorias = ['Todas', ...baseCategorias];
         const favCount = this.getFavorites().length;
 
         const chips = categorias.map(cat => {
@@ -879,7 +1063,10 @@ const Products = {
                             <span class="admin-card-stock ${stockColor}">Estoque: ${stock} <span class="text-slate-600 font-normal">(mín: ${minStock})</span></span>
                         </div>
 
-                        ${p.bulk_min_qty && p.bulk_unit_price ? `<div class="admin-card-bulk">📦 ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</div>` : ''}
+                        ${(() => {
+                            const tiers = this._resolveBulkTiers(p);
+                            return tiers.length ? `<div class="admin-card-bulk">📦 ${tiers.map(t => `${t.min_qty}+: R$ ${window.formatBRL(t.unit_price)}`).join(' · ')}</div>` : '';
+                        })()}
 
                         <div class="admin-card-actions">
                             <button onclick="window.APP.products.previewById('${p.id}')" class="admin-card-btn admin-card-btn-view" title="Visualizar">
@@ -939,7 +1126,10 @@ const Products = {
                         <div class="text-2xl font-black text-white">R$ ${window.formatBRL(p.price)}</div>
                         <div class="text-xs font-bold text-slate-400">Estoque: ${p.stock} <span class="text-slate-600">(mín: ${p.min_stock ?? 5})</span></div>
                     </div>
-                    ${p.bulk_min_qty && p.bulk_unit_price ? `<div class="text-xs text-cyan-400 font-semibold -mt-2">📦 Atacado: ${p.bulk_min_qty}+ un. = R$ ${window.formatBRL(p.bulk_unit_price)} cada</div>` : ''}
+                    ${(() => {
+                        const tiers = this._resolveBulkTiers(p);
+                        return tiers.length ? `<div class="text-xs text-cyan-400 font-semibold -mt-2">📦 Atacado: ${tiers.map(t => `${t.min_qty}+ = R$ ${window.formatBRL(t.unit_price)}`).join(' · ')}</div>` : '';
+                    })()}
 
                     <div class="flex gap-2">
                         <button onclick="window.APP.products.editById('${p.id}')" class="flex-1 bg-blue-600 hover:bg-blue-500 py-2 rounded-2xl font-bold text-xs text-white transition-all">
@@ -963,6 +1153,114 @@ const Products = {
     // ============================================================
     // MODAL DE PRODUTO — CRIAR / EDITAR (com galeria de mídia)
     // ============================================================
+
+    // ===== CATEGORIA NOVA (criada na hora, direto no formulário) =====
+
+    /**
+     * ✅ NOVO: liga (uma única vez) o listener que mostra/esconde o
+     * campo de texto "Nova categoria" conforme a opção escolhida no
+     * select.
+     */
+    _bindCategorySelect() {
+        const select = document.getElementById('p-category');
+        const newInput = document.getElementById('p-category-new');
+        if (!select || !newInput || select.dataset.bound) return;
+        select.dataset.bound = '1';
+
+        select.addEventListener('change', () => {
+            const isNew = select.value === '__new__';
+            newInput.classList.toggle('hidden', !isNew);
+            if (isNew) newInput.focus();
+        });
+    },
+
+    /**
+     * ✅ NOVO: ao editar um produto cuja categoria não está na lista
+     * fixa (foi criada por algum vendedor antes), injeta essa opção no
+     * select — senão o navegador simplesmente não teria como marcá-la
+     * como selecionada.
+     */
+    _ensureCategoryOption(category) {
+        const select = document.getElementById('p-category');
+        if (!select || !category) return;
+
+        const exists = Array.from(select.options).some(o => o.value === category);
+        if (exists) return;
+
+        const opt = document.createElement('option');
+        opt.value = category;
+        opt.textContent = `📁 ${category}`;
+
+        const newOpt = select.querySelector('option[value="__new__"]');
+        if (newOpt) select.insertBefore(opt, newOpt);
+        else select.appendChild(opt);
+    },
+
+    // ===== FAIXAS DE ATACADO (quantas o vendedor quiser) =====
+
+    _bindBulkTierAddButton() {
+        const btn = document.getElementById('p-bulk-tier-add-btn');
+        if (!btn || btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => this._addBulkTier());
+    },
+
+    _addBulkTier() {
+        if (this._bulkTiers.length >= 8) {
+            alert('❌ Máximo de 8 faixas de desconto por produto.');
+            return;
+        }
+        this._bulkTiers.push({ min_qty: '', unit_price: '' });
+        this._renderBulkTiersForm();
+
+        // Foca no primeiro campo da faixa recém-criada
+        const rows = document.querySelectorAll('#p-bulk-tiers-list [data-tier-qty]');
+        rows[rows.length - 1]?.focus();
+    },
+
+    _removeBulkTier(index) {
+        this._bulkTiers.splice(index, 1);
+        this._renderBulkTiersForm();
+    },
+
+    /**
+     * Desenha uma linha (quantidade mínima + preço por unidade + botão
+     * remover) por faixa em this._bulkTiers. Os valores são lidos
+     * direto dos inputs no momento de salvar — os oninput aqui só
+     * mantêm this._bulkTiers em dia pra sobreviver a um re-render
+     * (ex: adicionar/remover outra faixa) sem perder o que já foi
+     * digitado.
+     */
+    _renderBulkTiersForm() {
+        const list = document.getElementById('p-bulk-tiers-list');
+        if (!list) return;
+
+        if (!this._bulkTiers.length) {
+            list.innerHTML = '<div class="text-[11px] text-slate-500 text-center py-2">Nenhuma faixa configurada ainda</div>';
+            return;
+        }
+
+        list.innerHTML = this._bulkTiers.map((tier, i) => `
+            <div class="flex gap-2 items-center">
+                <div class="flex-1">
+                    <input type="number" min="2" placeholder="Qtd. mínima" value="${tier.min_qty ?? ''}"
+                        data-tier-qty
+                        oninput="window.APP.products._bulkTiers[${i}].min_qty = this.value"
+                        class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
+                </div>
+                <div class="flex-1">
+                    <input type="number" step="0.01" min="0" placeholder="Preço/unidade" value="${tier.unit_price ?? ''}"
+                        oninput="window.APP.products._bulkTiers[${i}].unit_price = this.value"
+                        class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
+                </div>
+                <button type="button" onclick="window.APP.products._removeBulkTier(${i})"
+                    class="flex-shrink-0 w-9 h-9 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 flex items-center justify-center font-black transition-all"
+                    aria-label="Remover faixa" title="Remover faixa">
+                    ✕
+                </button>
+            </div>
+        `).join('');
+    },
 
     openModal() {
         try {
@@ -989,18 +1287,21 @@ const Products = {
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = 5;
 
-            const bulkMinQtyEl = document.getElementById('p-bulk-min-qty');
-            const bulkUnitPriceEl = document.getElementById('p-bulk-unit-price');
-            if (bulkMinQtyEl) bulkMinQtyEl.value = '';
-            if (bulkUnitPriceEl) bulkUnitPriceEl.value = '';
+            // ✅ NOVO: reseta as faixas de atacado (agora dinâmicas)
+            this._bulkTiers = [];
+            this._renderBulkTiersForm();
 
             const categoryEl = document.getElementById('p-category');
             if (categoryEl) categoryEl.value = '';
+            const categoryNewEl = document.getElementById('p-category-new');
+            if (categoryNewEl) { categoryNewEl.value = ''; categoryNewEl.classList.add('hidden'); }
 
             const mediaInput = document.getElementById('p-media-input');
             if (mediaInput) mediaInput.value = '';
 
             this._bindMediaInput();
+            this._bindCategorySelect();
+            this._bindBulkTierAddButton();
             this._renderMediaPreview();
 
             const title = document.querySelector('#admin-modal h3');
@@ -1038,19 +1339,20 @@ const Products = {
     },
 
     /**
-     * ✅ NOVO: abre o modal de pré-visualização (só leitura) — o botão
-     * 👁️ no painel Admin/Estoque, pra conferir rapidamente as fotos e
-     * os dados de um produto sem precisar entrar no modo de edição.
+     * ✅ Abre o modal de pré-visualização (só leitura) — usado tanto
+     * pelo botão 👁️ do Admin/Estoque quanto pelo clique numa foto na
+     * vitrine pública (aí abre já na foto clicada, via startIndex).
      */
-    previewById(productId) {
-        const product = this.manageProducts.find(p => p.id === productId);
+    previewById(productId, startIndex = 0) {
+        const product = this.manageProducts.find(p => p.id === productId)
+            || this.products.find(p => p.id === productId);
         if (!product) { alert('❌ Produto não encontrado'); return; }
-        this.openPreview(product);
+        this.openPreview(product, startIndex);
     },
 
-    openPreview(product) {
+    openPreview(product, startIndex = 0) {
         this._previewMedia = (product.product_media || []).slice().sort((a, b) => a.sort_order - b.sort_order);
-        this._previewIndex = 0;
+        this._previewIndex = Math.max(0, Math.min(startIndex, this._previewMedia.length - 1));
 
         const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
 
@@ -1070,19 +1372,25 @@ const Products = {
 
         const bulkEl = document.getElementById('preview-bulk');
         if (bulkEl) {
-            bulkEl.textContent = (product.bulk_min_qty && product.bulk_unit_price)
-                ? `📦 Atacado: ${product.bulk_min_qty}+ un. = R$ ${window.formatBRL(product.bulk_unit_price)} cada`
+            const tiers = this._resolveBulkTiers(product);
+            bulkEl.textContent = tiers.length
+                ? `📦 Atacado: ${tiers.map(t => `${t.min_qty}+ = R$ ${window.formatBRL(t.unit_price)}`).join(' · ')}`
                 : '';
         }
 
-        // O botão "Editar" do preview leva direto pro modo de edição
-        // desse mesmo produto, fechando o preview antes.
+        // O botão "Editar" só aparece pra quem realmente pode editar
+        // esse produto (dono, ou Admin Supremo) — um cliente comum
+        // clicando na foto na vitrine não deve ver esse botão.
         const editBtn = document.getElementById('preview-edit-btn');
+        const canEdit = !!window.APP?.auth?.canEditProduct?.(product.owner_id);
         if (editBtn) {
-            editBtn.onclick = () => {
-                this.closePreview();
-                this.editById(product.id);
-            };
+            editBtn.classList.toggle('hidden', !canEdit);
+            if (canEdit) {
+                editBtn.onclick = () => {
+                    this.closePreview();
+                    this.editById(product.id);
+                };
+            }
         }
 
         this._renderPreviewMedia();
@@ -1178,18 +1486,30 @@ const Products = {
             const minStockEl = document.getElementById('p-min-stock');
             if (minStockEl) minStockEl.value = product.min_stock ?? 5;
 
-            const bulkMinQtyEl = document.getElementById('p-bulk-min-qty');
-            const bulkUnitPriceEl = document.getElementById('p-bulk-unit-price');
-            if (bulkMinQtyEl) bulkMinQtyEl.value = product.bulk_min_qty ?? '';
-            if (bulkUnitPriceEl) bulkUnitPriceEl.value = product.bulk_unit_price ?? '';
+            // ✅ NOVO: carrega as faixas de atacado já cadastradas (da
+            // tabela nova, com fallback pro par de colunas antigo — ver
+            // _resolveBulkTiers) pro formulário dinâmico.
+            this._bulkTiers = this._resolveBulkTiers(product).map(t => ({
+                min_qty: t.min_qty,
+                unit_price: t.unit_price
+            }));
+            this._renderBulkTiersForm();
 
+            // ✅ NOVO: se a categoria do produto não estiver na lista
+            // fixa (foi criada por algum vendedor), garante que ela
+            // apareça como opção no select antes de selecioná-la.
+            this._ensureCategoryOption(product.category);
             const categoryEl = document.getElementById('p-category');
             if (categoryEl) categoryEl.value = product.category || '';
+            const categoryNewEl = document.getElementById('p-category-new');
+            if (categoryNewEl) { categoryNewEl.value = ''; categoryNewEl.classList.add('hidden'); }
 
             const mediaInput = document.getElementById('p-media-input');
             if (mediaInput) mediaInput.value = '';
 
             this._bindMediaInput();
+            this._bindCategorySelect();
+            this._bindBulkTierAddButton();
             this._renderMediaPreview();
 
             const title = document.querySelector('#admin-modal h3');
@@ -1348,6 +1668,32 @@ const Products = {
         }
     },
 
+    /**
+     * ✅ NOVO: grava as faixas de atacado do formulário (this._bulkTiers)
+     * na tabela product_bulk_tiers. Sempre substitui do zero (apaga
+     * tudo que já existia pro produto e reinsere o conjunto atual) —
+     * mais simples e seguro do que tentar diferenciar quais faixas
+     * mudaram, já que são poucos registros por produto.
+     */
+    async _syncBulkTiers(productId) {
+        try {
+            await _supabase.from('product_bulk_tiers').delete().eq('product_id', productId);
+
+            if (!this._bulkTiers.length) return;
+
+            const rows = this._bulkTiers.map(t => ({
+                product_id: productId,
+                min_qty: parseInt(t.min_qty),
+                unit_price: parseFloat(t.unit_price)
+            }));
+
+            const { error } = await _supabase.from('product_bulk_tiers').insert(rows);
+            if (error) throw error;
+        } catch (err) {
+            log(`⚠️ Falha ao salvar faixas de atacado: ${err.message}`, 'warning');
+        }
+    },
+
     async saveProductDirect() {
         const btn = document.getElementById('btn-save');
         const originalText = btn?.innerText;
@@ -1360,32 +1706,51 @@ const Products = {
 
             const name = document.getElementById('p-name')?.value?.trim();
             const price = parseFloat(document.getElementById('p-price')?.value);
-            const category = document.getElementById('p-category')?.value?.trim();
+
+            // ✅ NOVO: categoria pode ser uma recém-criada na hora
+            // ("+ Criar nova categoria..." no select revela um campo
+            // de texto livre).
+            const categorySelect = document.getElementById('p-category');
+            let category = categorySelect?.value?.trim();
+            if (category === '__new__') {
+                category = document.getElementById('p-category-new')?.value?.trim();
+                if (!category) throw new Error('Digite o nome da nova categoria');
+            }
 
             if (!name) throw new Error('Nome é obrigatório');
             if (!price || price < 0) throw new Error('Preço deve ser válido');
             if (!category) throw new Error('Selecione uma categoria');
 
-            // ✅ NOVO: preço por atacado — opcional. Se o vendedor
-            // preencher só um dos dois campos, avisa (o banco também
-            // recusaria, mas é melhor avisar aqui antes de tentar salvar).
-            const bulkMinQtyRaw = document.getElementById('p-bulk-min-qty')?.value?.trim();
-            const bulkUnitPriceRaw = document.getElementById('p-bulk-unit-price')?.value?.trim();
-            const bulkMinQty = bulkMinQtyRaw ? parseInt(bulkMinQtyRaw) : null;
-            const bulkUnitPrice = bulkUnitPriceRaw ? parseFloat(bulkUnitPriceRaw) : null;
+            // ✅ NOVO: preço por atacado — agora aceita QUANTAS faixas o
+            // vendedor quiser (this._bulkTiers, preenchido pelos campos
+            // dinâmicos do formulário). Descarta linhas em branco (a
+            // pessoa clicou em "+" mas não chegou a preencher) e valida
+            // as que têm algum dado.
+            const tiersToValidate = this._bulkTiers.filter(t =>
+                (t.min_qty !== '' && t.min_qty !== null && t.min_qty !== undefined) ||
+                (t.unit_price !== '' && t.unit_price !== null && t.unit_price !== undefined)
+            );
 
-            if ((bulkMinQty && !bulkUnitPrice) || (!bulkMinQty && bulkUnitPrice)) {
-                throw new Error('Preencha os DOIS campos do preço por atacado (quantidade mínima e preço por unidade), ou deixe os dois em branco');
+            for (const t of tiersToValidate) {
+                const qty = parseInt(t.min_qty);
+                const unit = parseFloat(t.unit_price);
+                if (!Number.isFinite(qty) || qty < 2) {
+                    throw new Error('Cada faixa de atacado precisa de uma quantidade mínima válida (2 ou mais)');
+                }
+                if (!Number.isFinite(unit) || unit <= 0) {
+                    throw new Error('Cada faixa de atacado precisa de um preço por unidade válido');
+                }
+                if (unit >= price) {
+                    throw new Error('O preço por atacado precisa ser MENOR que o preço normal em todas as faixas (senão não é desconto nenhum)');
+                }
             }
-            if (bulkMinQty && bulkMinQty < 2) {
-                throw new Error('A quantidade mínima do preço por atacado precisa ser 2 ou mais');
-            }
-            if (bulkUnitPrice && bulkUnitPrice >= price) {
-                throw new Error('O preço por atacado precisa ser MENOR que o preço normal (senão não é desconto nenhum)');
-            }
+            this._bulkTiers = tiersToValidate;
 
             // owner_id NÃO entra aqui por padrão. Só é adicionado
             // explicitamente no ramo de CRIAÇÃO (insert), logo abaixo.
+            // ⚠️ bulk_min_qty/bulk_unit_price (colunas antigas) não são
+            // mais escritas por aqui — as faixas agora vivem só na
+            // tabela product_bulk_tiers (ver _syncBulkTiers).
             const productData = {
                 name,
                 price,
@@ -1393,8 +1758,6 @@ const Products = {
                 cost_price: parseFloat(document.getElementById('p-cost')?.value) || 0,
                 stock: parseInt(document.getElementById('p-stock')?.value) || 0,
                 min_stock: parseInt(document.getElementById('p-min-stock')?.value) || 5,
-                bulk_min_qty: bulkMinQty,
-                bulk_unit_price: bulkUnitPrice,
                 description: document.getElementById('p-desc')?.value?.trim() || '',
                 active: true
             };
@@ -1424,6 +1787,10 @@ const Products = {
             // mantido em dia sozinho pelo gatilho do banco.
             await this._syncProductMedia(productId);
 
+            // ✅ NOVO: faixas de preço por atacado (quantas a pessoa
+            // configurou no formulário).
+            await this._syncBulkTiers(productId);
+
             log(this.editingId ? '✅ Produto atualizado' : '✅ Produto criado', 'success');
             alert(this.editingId ? '✅ Produto atualizado!' : '✅ Produto criado!');
 
@@ -1432,6 +1799,10 @@ const Products = {
             if (!this.editingId) window.APP?.onboarding?.markMission?.('product');
 
             this.closeModal();
+
+            // ✅ NOVO: força recarregar a lista de categorias — pode ter
+            // acabado de nascer uma categoria nova.
+            this._allCategories = [];
             await this.fetchAll();
 
         } catch (err) {

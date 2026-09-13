@@ -68,7 +68,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=15">
 
     <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
          (26KB), gerado escaneando todo o projeto — no lugar do script
@@ -850,7 +850,7 @@
     <!-- ========================================
          AUTH MODAL
          ======================================== -->
-    <div id="auth-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <div id="auth-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
             <div class="flex gap-2 mb-6">
                 <button id="login-tab-btn" class="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm uppercase transition-all" data-tab="login">LOGIN</button>
@@ -870,7 +870,7 @@
                 <form data-form="auth" data-type="signup" class="space-y-4">
                     <input id="signup-name" type="text" placeholder="Nome" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <input id="signup-email" type="email" placeholder="Email" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
-                    <input id="signup-phone" type="tel" placeholder="Telefone - Permite conversa por whatsapp" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
+                    <input id="signup-phone" type="tel" placeholder="Telefone" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <input id="signup-password" type="password" placeholder="Senha (mín 6 caracteres)" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                     <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">CADASTRAR</button>
                     <p class="text-[11px] text-slate-500 text-center leading-relaxed">
@@ -895,7 +895,7 @@
     <!-- ========================================
          PERFIL DO USUÁRIO
          ======================================== -->
-    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <div id="profile-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-sm border border-white/10 shadow-2xl text-center">
             <div id="profile-modal-avatar" class="w-20 h-20 mx-auto rounded-full flex items-center justify-center font-black text-2xl text-white mb-4">
                 --
@@ -932,7 +932,7 @@
     <!-- ========================================
          TENANT DETAILS MODAL
          ======================================== -->
-    <div id="tenant-details-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <div id="tenant-details-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 id="tenant-details-title" class="text-2xl font-black mb-6">DETALHES</h3>
             <div id="tenant-details-content" class="space-y-2">
@@ -945,7 +945,7 @@
     <!-- ========================================
          ADMIN MODAL (Criar/Editar Produto)
          ======================================== -->
-    <div id="admin-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <div id="admin-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="text-2xl font-black mb-6">NOVO PRODUTO</h3>
             <form data-form="product" class="space-y-4">
@@ -962,7 +962,10 @@
                     <option value="Livros e Papelaria">📚 Livros e Papelaria</option>
                     <option value="Serviços">🛠️ Serviços</option>
                     <option value="Outros">📦 Outros</option>
+                    <option value="__new__">➕ Criar nova categoria...</option>
                 </select>
+                <input id="p-category-new" type="text" placeholder="Digite o nome da nova categoria" maxlength="40"
+                    class="hidden w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
                 <input id="p-price" type="number" step="0.01" placeholder="Preço de Venda" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                 <input id="p-cost" type="number" step="0.01" placeholder="Custo" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
                 <input id="p-stock" type="number" placeholder="Estoque" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500">
@@ -973,17 +976,13 @@
 
                 <div class="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
                     <label class="text-xs font-black text-cyan-300 uppercase block mb-2">📦 Preço por Atacado (opcional)</label>
-                    <div class="text-[10px] text-slate-500 mb-3 leading-relaxed">Comprando a partir de uma certa quantidade, cada unidade sai mais barata. Deixe os dois campos em branco pra não usar.</div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <input id="p-bulk-min-qty" type="number" min="2" placeholder="Qtd. mínima" class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
-                            <div class="text-[9px] text-slate-500 mt-1 px-1">Ex: 3</div>
-                        </div>
-                        <div>
-                            <input id="p-bulk-unit-price" type="number" step="0.01" min="0" placeholder="Preço/unidade" class="w-full p-3 rounded-xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 text-sm">
-                            <div class="text-[9px] text-slate-500 mt-1 px-1">Ex: 10,00</div>
-                        </div>
-                    </div>
+                    <div class="text-[10px] text-slate-500 mb-3 leading-relaxed">Quanto mais alguém compra, mais barato fica — crie quantas faixas de desconto quiser (ex: 3+ por R$4,00, 6+ por R$3,50...).</div>
+
+                    <div id="p-bulk-tiers-list" class="space-y-3 mb-3"></div>
+
+                    <button type="button" id="p-bulk-tier-add-btn" class="w-full py-2.5 rounded-xl border border-dashed border-cyan-500/40 text-cyan-300 text-xs font-bold hover:bg-cyan-500/10 transition-all">
+                        ➕ Adicionar outra faixa de desconto
+                    </button>
                 </div>
                 <textarea id="p-desc" placeholder="Descrição" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 resize-none h-20"></textarea>
 
@@ -1012,7 +1011,7 @@
          foto/vídeo em tamanho grande e os dados, sem entrar no modo
          de edição.
          ======================================== -->
-    <div id="product-preview-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+    <div id="product-preview-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm p-4">
         <div class="bg-[#161b2c] rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="preview-media-wrap">
                 <img id="preview-media-img" src="" alt="" class="preview-media-img hidden">
@@ -1059,7 +1058,7 @@
     <!-- ========================================
          CUSTOMER CHECKOUT MODAL
          ======================================== -->
-    <div id="customer-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm">
+    <div id="customer-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
             <h3 class="text-2xl font-black mb-6">FINALIZAR COMPRA</h3>
             <form data-form="checkout" class="space-y-4">
@@ -1095,30 +1094,30 @@
     <!-- ========================================
          SCRIPTS — ORDEM CRÍTICA
          ======================================== -->
-    <script src="config.js?v=3"></script>
+    <script src="config.js?v=4"></script>
     <script src="storage.js?v=2"></script>
     <script src="wrapper.js?v=1"></script>
     <script src="auth.js?v=9"></script>
-    <script src="store-status.js?v=2"></script>
-    <script src="cart.js?v=4"></script>
-    <script src="products.js?v=11"></script>
+    <script src="store-status.js?v=3"></script>
+    <script src="cart.js?v=5"></script>
+    <script src="products.js?v=14"></script>
     <script src="ads.js?v=6"></script>
     <script src="bi.js?v=9"></script>
-    <script src="navigation.js?v=5"></script>
+    <script src="navigation.js?v=7"></script>
     <script src="tenants.js?v=6"></script>
-    <script src="orders.js?v=8"></script>
+    <script src="orders.js?v=9"></script>
     <script src="order-management.js?v=2"></script>
     <script src="admin-warnings.js?v=2"></script>
     <script src="vendor-settings.js?v=6"></script>
-    <script src="notifications.js?v=1"></script>
-    <script src="moderation.js?v=1"></script>
-    <script src="restock-alerts.js?v=1"></script>
+    <script src="notifications.js?v=2"></script>
+    <script src="moderation.js?v=2"></script>
+    <script src="restock-alerts.js?v=2"></script>
     <script src="onboarding.js?v=1"></script>
     <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
          "pwa-install.js" que estava aqui não bate com nenhum arquivo,
          o que causaria um 404 silencioso. -->
     <script src="pwa.js?v=2"></script>
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=7"></script>
     <script src="theme-toggle.js?v=2"></script>
 
     <!-- Preview em tempo real do anúncio texto -->

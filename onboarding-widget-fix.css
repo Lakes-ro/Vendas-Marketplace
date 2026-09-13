@@ -1,0 +1,65 @@
+/* ============================================================
+   FIX: cartão de Missões (e botão "❓") sobrepondo os botões
+   da sidebar (Carrinho/Entrar/Sair) no desktop.
+
+   Como usar: no seu style.css, PROCURE as regras abaixo:
+
+     .onboarding-help-btn { ... }
+     .onboarding-missions-widget { ... }
+     @media (min-width: 769px) { .onboarding-help-btn { bottom: 24px; } }
+     @media (min-width: 769px) { .onboarding-missions-widget { bottom: 80px; } }
+
+   E SUBSTITUA por este bloco inteiro (ele já inclui as versões
+   originais + o ajuste de posição pro desktop).
+   ============================================================ */
+
+.onboarding-help-btn {
+    position: fixed;
+    left: 20px;
+    bottom: calc(var(--bottom-nav-height) + 20px);
+    z-index: 150;
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 50%;
+    background: #161b2c;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fbbf24;
+    font-size: 18px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    transition: transform .2s ease, filter .2s ease;
+}
+.onboarding-help-btn:hover { transform: scale(1.08); filter: none; }
+.onboarding-help-btn:active { transform: scale(0.94); }
+
+.onboarding-missions-widget {
+    position: fixed;
+    left: 20px;
+    bottom: calc(var(--bottom-nav-height) + 76px);
+    z-index: 150;
+    width: 240px;
+    max-width: calc(100vw - 40px);
+    background: #161b2c;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+    overflow: hidden;
+}
+
+/* Tablet (769px–1023px): sidebar fica compacta (só ícones, 72px) —
+   empurra os dois elementos pra fora dessa faixa. */
+@media (min-width: 769px) {
+    .onboarding-help-btn { bottom: 24px; left: 96px; }
+    .onboarding-missions-widget { bottom: 80px; left: 96px; }
+}
+
+/* Desktop largo (1024px+): sidebar fica cheia (256px, com labels) —
+   empurra ainda mais pra fora, senão fica em cima do Carrinho/Entrar. */
+@media (min-width: 1024px) {
+    .onboarding-help-btn { left: 280px; }
+    .onboarding-missions-widget { left: 280px; }
+}

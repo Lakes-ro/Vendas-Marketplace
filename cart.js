@@ -45,7 +45,13 @@ const Cart = {
         if (drawer) drawer.classList.add('translate-x-full');
     },
 
-    add(productId, productName, price, bulkMinQty, bulkUnitPrice) {
+    /**
+     * ✅ NOVO: agora recebe `bulkTiers` (array de {min_qty, unit_price},
+     * quantas faixas o vendedor tiver cadastrado) em vez de um único
+     * par min/preço — o preço de atacado aplicado depende de quantas
+     * unidades desse produto acabam ficando no carrinho.
+     */
+    add(productId, productName, price, bulkTiers) {
         if (window.StoreStatus && typeof StoreStatus.canAddToCart === 'function') {
             if (!StoreStatus.canAddToCart()) return;
         }
@@ -54,8 +60,7 @@ const Cart = {
             id: productId,
             name: productName,
             price,
-            bulkMinQty: bulkMinQty || null,
-            bulkUnitPrice: bulkUnitPrice || null
+            bulkTiers: Array.isArray(bulkTiers) ? bulkTiers : []
         });
         Storage.saveCart(this.items);
         this.updateUI();
@@ -121,6 +126,27 @@ const Cart = {
         log(`Item removido: ${removed.name}`, 'success');
     },
 
+    /**
+     * ✅ NOVO: escolhe, entre as faixas de atacado do item, a de maior
+     * quantidade mínima que a quantidade em carrinho ainda atinge —
+     * mesma regra usada no banco (create_order). Mantém compatibilidade
+     * com itens antigos salvos no localStorage antes dessa mudança
+     * (formato bulkMinQty/bulkUnitPrice, uma faixa só).
+     * ⚠️ Isso é só o valor MOSTRADO pro comprador se organizar — o
+     * valor que realmente vale é sempre recalculado no banco.
+     */
+    _effectiveUnitPrice(item, qty) {
+        const tiers = (item.bulkTiers && item.bulkTiers.length)
+            ? item.bulkTiers
+            : (item.bulkMinQty && item.bulkUnitPrice ? [{ min_qty: item.bulkMinQty, unit_price: item.bulkUnitPrice }] : []);
+
+        const applicable = tiers
+            .filter(t => qty >= Number(t.min_qty))
+            .sort((a, b) => Number(b.min_qty) - Number(a.min_qty))[0];
+
+        return applicable ? Number(applicable.unit_price) : Number(item.price);
+    },
+
     updateUI() {
         const count = this.items.length;
 
@@ -138,13 +164,7 @@ const Cart = {
         const qtyById = {};
         this.items.forEach(item => { qtyById[item.id] = (qtyById[item.id] || 0) + 1; });
 
-        const effectivePrice = (item) => {
-            const qty = qtyById[item.id] || 1;
-            if (item.bulkMinQty && item.bulkUnitPrice && qty >= item.bulkMinQty) {
-                return Number(item.bulkUnitPrice);
-            }
-            return Number(item.price);
-        };
+        const effectivePrice = (item) => this._effectiveUnitPrice(item, qtyById[item.id] || 1);
 
         const itemsDiv = document.getElementById('cart-items');
         if (itemsDiv) {
@@ -215,11 +235,7 @@ const Cart = {
         this.items.forEach(item => { qtyById[item.id] = (qtyById[item.id] || 0) + 1; });
 
         return this.items.reduce((acc, item) => {
-            const qty = qtyById[item.id] || 1;
-            const unitPrice = (item.bulkMinQty && item.bulkUnitPrice && qty >= item.bulkMinQty)
-                ? Number(item.bulkUnitPrice)
-                : Number(item.price);
-            return acc + unitPrice;
+            return acc + this._effectiveUnitPrice(item, qtyById[item.id] || 1);
         }, 0);
     },
 

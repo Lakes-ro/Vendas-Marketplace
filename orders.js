@@ -37,6 +37,14 @@ const Orders = {
             if (!window.APP.storeStatus.canCheckout()) return;
         }
 
+        // ✅ FIX: antes o carrinho ficava aberto por trás do formulário
+        // de checkout (os dois no mesmo z-index) — o fundo escurecido
+        // do modal não cobria o painel do carrinho por completo, então
+        // parecia que "nada tinha acontecido" ao clicar em Finalizar
+        // Compra. Agora o carrinho fecha de vez antes do formulário
+        // aparecer.
+        window.APP?.cart?.closeCart?.();
+
         const modal = document.getElementById('customer-modal');
         if (modal) modal.classList.remove('hidden');
     },

@@ -200,6 +200,78 @@ if (typeof window.CONFIG_LOADED !== 'undefined') {
 
     window._supabase = null;
 
+    /**
+     * ✅ NOVO: window.playNotificationSound(type) — toca um bipe curto
+     * (gerado na hora via Web Audio API, sem depender de nenhum arquivo
+     * de áudio externo) quando chega uma notificação em tempo real
+     * (venda, produto novo pra moderar, reposição de estoque).
+     * ⚠️ Navegador só libera som depois de alguma interação da pessoa
+     * na página (regra de autoplay) — por isso o primeiro clique/toque
+     * já "destrava" o áudio sozinho, aqui embaixo.
+     */
+    let _notificationAudioCtx = null;
+
+    function _ensureAudioContext() {
+        if (!_notificationAudioCtx) {
+            try {
+                _notificationAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                return null;
+            }
+        }
+        if (_notificationAudioCtx.state === 'suspended') {
+            _notificationAudioCtx.resume().catch(() => {});
+        }
+        return _notificationAudioCtx;
+    }
+
+    // Destrava o áudio no primeiro clique/toque/tecla — sem isso, o
+    // navegador recusa tocar qualquer som antes de uma interação real.
+    ['click', 'touchstart', 'keydown'].forEach((evt) => {
+        document.addEventListener(evt, () => _ensureAudioContext(), { once: true, passive: true });
+    });
+
+    window.playNotificationSound = function (type = 'default') {
+        try {
+            const ctx = _ensureAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
+
+            const now = ctx.currentTime;
+
+            // Cada tipo de aviso tem uma "melodia" curta e diferente,
+            // pra dar pra reconhecer de ouvido sem olhar pra tela.
+            const presets = {
+                sale:       [{ freq: 880,    start: 0,    dur: 0.12 }, { freq: 1174.66, start: 0.12, dur: 0.18 }],
+                moderation: [{ freq: 660,    start: 0,    dur: 0.16 }],
+                restock:    [{ freq: 523.25, start: 0,    dur: 0.12 }, { freq: 783.99,  start: 0.12, dur: 0.16 }],
+                default:    [{ freq: 740,    start: 0,    dur: 0.15 }]
+            };
+            const notes = presets[type] || presets.default;
+
+            notes.forEach((note) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = note.freq;
+
+                const startTime = now + note.start;
+                const endTime = startTime + note.dur;
+
+                gain.gain.setValueAtTime(0.0001, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.35, startTime + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(startTime);
+                osc.stop(endTime + 0.02);
+            });
+        } catch (err) {
+            // Som é só um extra — nunca deixa quebrar a notificação visual
+        }
+    };
+
     function initSupabase() {
         console.clear();
         window.log('🚀 Iniciando Estação Ityrapuan...', 'info');

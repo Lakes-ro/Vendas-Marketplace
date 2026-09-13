@@ -93,6 +93,9 @@ const Notifications = {
         `;
         container.appendChild(toast);
 
+        // ✅ NOVO: som de notificação (funciona em celular e PC)
+        window.playNotificationSound?.('sale');
+
         if (window.lucide) lucide.createIcons();
 
         requestAnimationFrame(() => toast.classList.add('cart-toast-show'));

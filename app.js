@@ -170,7 +170,7 @@ window.goToTab    = (tab) => Navigation.showTab(tab);
 window.toggleCart = ()    => window.APP?.cart?.toggleCart?.();
 window.openLogin  = (tab) => window.APP?.auth?.openAuthModal?.(tab || 'login');
 window.doLogout   = ()    => window.APP?.auth?.logout?.();
-window.addToCart  = (id, name, price, bulkMinQty, bulkUnitPrice) => window.APP?.cart?.add?.(id, name, price, bulkMinQty, bulkUnitPrice);
+window.addToCart  = (id, name, price, bulkTiers) => window.APP?.cart?.add?.(id, name, price, bulkTiers);
 window.doCheckout = ()    => window.APP?.orders?.checkout?.();
 
 function log(message, type = 'info') {

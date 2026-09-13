@@ -508,6 +508,21 @@ aside.app-sidebar {
     line-height: 1.6;
 }
 
+.store-closed-dismiss-btn {
+    margin-top: 20px;
+    width: 100%;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    font-weight: 800;
+    font-size: 14px;
+    transition: background 0.2s ease, transform 0.15s ease;
+}
+.store-closed-dismiss-btn:hover { background: rgba(255, 255, 255, 0.12); filter: none; }
+.store-closed-dismiss-btn:active { transform: scale(0.98); }
+
 /* Sabbath — visual diferenciado */
 #store-closed-overlay[data-mode="sabbath_closed"] .store-closed-content {
     border-color: rgba(251, 191, 36, 0.2);
@@ -1561,8 +1576,20 @@ h1, h2, h3, .font-black, .font-bold {
     -webkit-overflow-scrolling: touch;
     border-radius: 1rem;
     scrollbar-width: none;
+    cursor: grab;
+    user-select: none;
 }
 .product-gallery-track::-webkit-scrollbar { display: none; }
+
+/* ✅ NOVO: enquanto a pessoa está arrastando com o mouse, desliga o
+   "encaixe" automático (scroll-snap) — senão o navegador tenta puxar
+   de volta pra foto mais próxima a cada pixel movido, travando o
+   arraste. Volta a encaixar suave assim que solta o botão. */
+.product-gallery-track.is-dragging {
+    scroll-snap-type: none;
+    cursor: grabbing;
+    scroll-behavior: auto;
+}
 
 .product-gallery-item {
     flex: 0 0 100%;
@@ -1571,11 +1598,13 @@ h1, h2, h3, .font-black, .font-bold {
     object-fit: cover;
     scroll-snap-align: start;
     background: #1e293b;
+    pointer-events: none;
 }
 
 video.product-gallery-item {
     object-fit: contain;
     background: #000;
+    pointer-events: auto;
 }
 
 .product-gallery-dots {
@@ -1942,20 +1971,47 @@ video.product-gallery-item {
 }
 
 /* ----------------------------------------
-   ✅ NOVO: SELO DE PREÇO POR ATACADO
+   ✅ MELHORADO: SELO DE PREÇO POR ATACADO
    Aparece no card do produto quando o vendedor configurou desconto
-   por quantidade mínima.
+   por quantidade mínima — agora com título + uma "pilula" por faixa,
+   suportando quantas faixas o vendedor tiver criado (não só uma).
    ---------------------------------------- */
 .product-bulk-badge {
-    background: rgba(6, 182, 212, 0.1);
+    background: rgba(6, 182, 212, 0.08);
     border: 1px solid rgba(6, 182, 212, 0.25);
-    color: #22d3ee;
-    font-size: 10.5px;
-    font-weight: 700;
-    padding: 6px 10px;
-    border-radius: 10px;
-    line-height: 1.4;
+    border-radius: 14px;
+    padding: 10px 12px;
 }
+
+.product-bulk-badge-title {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #22d3ee;
+    margin-bottom: 6px;
+}
+
+.product-bulk-badge-tiers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.product-bulk-tier-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #a5f3fc;
+    background: rgba(6, 182, 212, 0.12);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.product-bulk-tier-pill strong { color: #22d3ee; font-weight: 900; }
 
 /* ----------------------------------------
    ✅ NOVO: TOAST "VOLTOU AO ESTOQUE"

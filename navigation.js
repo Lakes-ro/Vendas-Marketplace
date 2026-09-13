@@ -17,7 +17,7 @@
  */
 
 const Navigation = {
-    sections: ['market', 'bi', 'admin', 'seller', 'ads', 'ads-requests', 'vendor-settings', 'tenants'],
+    sections: ['market', 'bi', 'admin', 'seller', 'ads', 'ads-requests', 'vendor-settings', 'tenants', 'moderation'],
     activeTab: 'market',
 
     init() {
@@ -64,9 +64,19 @@ const Navigation = {
                 const id    = btn.getAttribute('data-id');
                 const name  = btn.getAttribute('data-name');
                 const price = parseFloat(btn.getAttribute('data-price'));
+
+                // ✅ NOVO: agora vem um array de faixas (quantas o
+                // vendedor tiver cadastrado), não mais um par único.
+                let bulkTiers = [];
+                try {
+                    bulkTiers = JSON.parse(btn.getAttribute('data-bulk-tiers') || '[]');
+                } catch (e) {
+                    bulkTiers = [];
+                }
+
                 if (window.APP?.cart) {
                     const beforeCount = window.APP.cart.getCount();
-                    window.APP.cart.add(id, name, price);
+                    window.APP.cart.add(id, name, price, bulkTiers);
                     // Só anima o botão se o item realmente entrou (loja pode estar fechada)
                     if (window.APP.cart.getCount() > beforeCount) {
                         this._flashAddButton(btn);
@@ -232,6 +242,10 @@ const Navigation = {
                 if (window.APP.ads._loadVendorRequests) window.APP.ads._loadVendorRequests();
             }
             else if (tab === 'vendor-settings' && window.APP.vendorSettings?.refresh) window.APP.vendorSettings.refresh();
+            else if (tab === 'moderation' && window.APP.moderation) {
+                window.APP.moderation.loadQueue();
+                window.APP.moderation.clearUnseen();
+            }
         } catch (err) {
             log(`⚠️ Erro ao carregar aba ${tab}: ${err.message}`, 'warning');
         }
