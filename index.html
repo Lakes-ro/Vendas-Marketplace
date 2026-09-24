@@ -2,64 +2,26 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b0f1a">
     <meta name="description" content="Ityrapuã Store - Marketplace comunitário com BI integrado">
     <title>Ityrapuã Store | Marketplace</title>
 
-    <script>
-  (function () {
-    var theme = localStorage.getItem('ityrapuan_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-  })();
-</script>
-
-
-
-    <!-- ✅ PERFORMANCE + PWA: limpeza de Service Worker fantasma/cache
-         antigo agora roda UMA ÚNICA VEZ por aparelho (marcada com uma
-         flag no localStorage), não em toda visita como antes. Antes
-         disso, TODA carga de página apagava todo o cache e desregistrava
-         o Service Worker, então nenhuma visita repetida aproveitava
-         cache de nada. Além disso, o Service Worker (sw.js) agora é de
-         fato registrado — sem isso o Chrome/Android nunca considera o
-         app "instalável". Precisa continuar sendo o PRIMEIRO script. -->
+    <!-- Tema salvo aplicado antes de desenhar a página (evita piscar) -->
     <script>
         (function () {
-            const CLEANUP_FLAG = 'ityrapuan_sw_cleanup_v1_done';
-            const jaLimpou = localStorage.getItem(CLEANUP_FLAG);
-
-            function registrarSW() {
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('sw.js').catch(err => {
-                        console.warn('Falha ao registrar Service Worker:', err);
-                    });
-                }
-            }
-
-            if (!jaLimpou && 'serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations()
-                    .then(regs => regs.forEach(reg => reg.unregister()))
-                    .then(() => 'caches' in window
-                        ? caches.keys().then(names => Promise.all(names.map(n => caches.delete(n))))
-                        : null)
-                    .then(() => {
-                        localStorage.setItem(CLEANUP_FLAG, '1');
-                        registrarSW();
-                    });
-            } else {
-                registrarSW();
-            }
+            var theme = 'light';
+            try { theme = localStorage.getItem('ityrapuan_theme') || 'light'; } catch (e) {}
+            document.documentElement.setAttribute('data-theme', theme);
         })();
-        
-
-        
     </script>
 
+
     <!-- PWA -->
+    <script defer src="js/sw-register.js?v=43"></script>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="icon-192.png">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" href="img/icon-192.png">
+    <link rel="apple-touch-icon" href="img/icon-192.png">
 
     <!-- ✅ NOVO: tipografia da marca — Sora nos títulos (mais autoral),
          Inter no corpo (leitura confortável) -->
@@ -68,41 +30,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- ESTILOS -->
-    <link rel="stylesheet" href="style.css?v=15">
+    <link rel="stylesheet" href="css/style.css?v=43">
 
-    <!-- ✅ PERFORMANCE: Tailwind agora é um CSS já compilado e minificado
-         (26KB), gerado escaneando todo o projeto — no lugar do script
-         que baixava o compilador inteiro e recompilava TODO o CSS no
-         celular, a cada carregamento de página.
-         ⚠️ Se no futuro adicionar uma classe Tailwind nova em algum
-         arquivo que ainda não usa essa classe, ela só aparece depois de
-         reconstruir esse arquivo (é só pedir). Suba o "?v=" ao regerar. -->
-    <link rel="stylesheet" href="tailwind.built.css?v=3">
-    <link rel="stylesheet" href="theme.css?v=2">
+    <!-- Tailwind já compilado (só as classes usadas no projeto) -->
+    <link rel="stylesheet" href="css/tailwind-built.css?v=43">
+    <link rel="stylesheet" href="css/theme.css?v=43">
 
     <!-- CHART.JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
     <!-- SUPABASE JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- LUCIDE ICONS -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@1.47.0"></script>
 
-    <style>
-        #ad-form-text textarea { font-family: 'Inter', sans-serif; }
-        #preview-title { word-break: break-word; }
-        #preview-text  { word-break: break-word; white-space: pre-wrap; }
-
-        #logout-btn {
-            min-height: 56px;
-            align-items: center;
-        }
-        #logout-btn:hover {
-            background: rgba(239,68,68,0.1);
-            border-color: rgba(239,68,68,0.3);
-        }
-    </style>
 </head>
 <body class="bg-[#0b0f1a] text-slate-200 flex min-h-screen font-sans overflow-x-hidden">
 
@@ -238,7 +180,7 @@
 
             <button id="vendor-settings-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="vendor-settings">
                 <i data-lucide="settings" class="flex-shrink-0 text-cyan-500"></i>
-                <span class="block font-bold text-sm text-cyan-500 group-hover:text-cyan-400">STATUS DA LOJA</span>
+                <span class="block font-bold text-sm text-cyan-500 group-hover:text-cyan-400">CONFIGURAÇÕES DA LOJA</span>
             </button>
 
             <button id="tenants-nav-btn" class="w-full hidden flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group" data-nav="tenants">
@@ -274,7 +216,7 @@
                 <span class="block">Sair</span>
             </button>
 
-            <a href="privacidade.html" class="w-full text-center text-[10px] text-slate-600 hover:text-slate-400 font-bold py-1 transition-all hidden lg:block">
+            <a href="html/privacidade.html" class="w-full text-center text-[10px] text-slate-600 hover:text-slate-400 font-bold py-1 transition-all hidden lg:block">
                 Política de Privacidade
             </a>
         </div>
@@ -305,7 +247,7 @@
                 <span>Role para ver os produtos</span>
             </div>
 
-            <h2 class="text-3xl font-black mb-1">Marketplace</h2>
+            <h2 id="produtos" class="text-3xl font-black mb-1">Marketplace</h2>
             <p class="market-subtitle">Feito por quem mora aqui, pra quem mora aqui — novidades toda semana 👇</p>
             <div class="category-filter-wrapper mb-6">
                 <button id="category-scroll-left" type="button" class="category-scroll-arrow category-scroll-arrow-left is-hidden" onclick="window.APP.products.scrollCategoryBar(-1)" aria-label="Ver categorias anteriores">
@@ -453,7 +395,9 @@
         <div id="sec-ranking-content" class="hidden px-6 pb-6">
             <p id="info-ranking" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Compara o desempenho de cada vendedor no período selecionado — quem mais vende, quem dá mais lucro.</p>
             <div id="bi-vendor-ranking" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Sem dados suficientes neste período</div>
+                <div class="skeleton skeleton-line full"></div>
+                <div class="skeleton skeleton-line medium"></div>
+                <div class="skeleton skeleton-line short"></div>
             </div>
         </div>
     </div>
@@ -469,7 +413,8 @@
         <div id="sec-stock-content" class="hidden px-6 pb-6">
             <p id="info-stock" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Produtos com estoque igual ou abaixo do mínimo configurado no cadastro — hora de repor antes que acabe e você perca vendas.</p>
             <div id="bi-low-stock-list" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Carregando...</div>
+                <div class="skeleton skeleton-line full"></div>
+                <div class="skeleton skeleton-line medium"></div>
             </div>
         </div>
     </div>
@@ -485,7 +430,9 @@
         <div id="sec-turnover-content" class="hidden px-6 pb-6">
             <p id="info-turnover" class="hidden text-[11px] text-slate-500 mb-4 leading-relaxed">Com base no ritmo de vendas do período selecionado, mostra quantos dias o estoque atual de cada produto ainda vai durar. Poucos dias restantes = repor com urgência. Produtos sem nenhuma venda aparecem como "estoque parado" — candidatos a promoção ou liquidação.</p>
             <div id="bi-stock-turnover" class="space-y-2">
-                <div class="text-slate-600 text-center py-6">Carregando...</div>
+                <div class="skeleton skeleton-line full"></div>
+                <div class="skeleton skeleton-line medium"></div>
+                <div class="skeleton skeleton-line short"></div>
             </div>
         </div>
     </div>
@@ -496,7 +443,11 @@
             <i data-lucide="chevron-down" id="sec-orders-chevron" class="w-5 h-5 text-slate-500 transition-transform flex-shrink-0"></i>
         </div>
         <div id="sec-orders-content" class="hidden px-6 pb-6">
-            <div id="bi-orders-detail" class="space-y-3"></div>
+            <div id="bi-orders-detail" class="space-y-3">
+                <div class="skeleton skeleton-line full"></div>
+                <div class="skeleton skeleton-line medium"></div>
+                <div class="skeleton skeleton-line full"></div>
+            </div>
         </div>
     </div>
 </section>
@@ -568,9 +519,25 @@
         <!-- ===== ADMIN PANEL ===== -->
         <section id="admin-section" class="hidden animate-in">
             <h2 class="text-3xl font-black mb-6 text-red-500">ADMIN PANEL</h2>
-            <button class="mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 px-6 rounded-2xl transition-all" data-action="open-product-modal">
+            <button id="admin-new-product-btn" class="mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 px-6 rounded-2xl transition-all" data-action="open-product-modal">
                 ➕ NOVO PRODUTO
             </button>
+            <div id="image-optimizer-panel"></div>
+            <div id="global-store-override-section" class="bg-slate-900/50 p-6 rounded-2xl border border-red-500/30 mb-6 hidden">
+                <h3 class="text-lg font-black text-red-400 mb-2">🚨 Fechar a Loja Inteira</h3>
+                <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                    Isso fecha o marketplace <strong class="text-slate-300">INTEIRO</strong>, pra todos os vendedores, imediatamente
+                    — sobrepõe até o horário automático (Sabbath/noturno). Use só em emergência (imprevisto, manutenção, etc).
+                    Fica fechado até você mesmo reabrir aqui.
+                </p>
+                <div id="global-override-status" class="mb-4 p-3 bg-white/5 rounded-lg text-sm">
+                    Carregando...
+                </div>
+                <button id="global-override-toggle-btn" onclick="window.APP.vendorSettings.toggleGlobalOverride()" class="w-full py-3 rounded-xl font-black text-white transition-all">
+                    Carregando...
+                </button>
+            </div>
+
             <div id="admin-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
         </section>
 
@@ -580,7 +547,7 @@
             <button class="mb-6 bg-blue-600 hover:bg-blue-500 text-white font-black py-3 px-6 rounded-2xl transition-all" data-action="open-product-modal">
                 ➕ NOVO PRODUTO
             </button>
-            <div id="seller-list" class="space-y-3"></div>
+            <div id="seller-list" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
         </section>
 
         <!-- ===== ADS PANEL ===== -->
@@ -662,7 +629,10 @@
             </div>
 
             <div id="ads-admin-requests-wrapper" class="mt-10 hidden">
-                <h3 class="text-lg font-black text-orange-400 mb-4">📋 Solicitações de Vendedores</h3>
+                <h3 class="text-lg font-black text-orange-400 mb-4 flex items-center gap-2">
+                    📋 Solicitações de Vendedores
+                    <button onclick="window.APP.ads.showHelp('admin')" class="inline-help-btn" title="Como funciona?" aria-label="Como funciona?">❓</button>
+                </h3>
                 <div id="ads-admin-requests-list" class="space-y-3">
                     <div class="text-slate-600 text-center py-8">Carregando...</div>
                 </div>
@@ -671,45 +641,36 @@
 
         <!-- ===== ADS REQUESTS (SOLICITAÇÕES DE ANÚNCIO) ===== -->
         <section id="ads-requests-section" class="hidden animate-in">
-            <h2 class="text-3xl font-black mb-6 text-orange-500">📋 SOLICITAÇÕES DE ANÚNCIO</h2>
+            <h2 class="text-3xl font-black mb-6 text-orange-500 flex items-center gap-3">
+                📋 SOLICITAÇÕES DE ANÚNCIO
+                <button onclick="window.APP.ads.showHelp('vendor')" class="inline-help-btn" title="Como funciona?" aria-label="Como funciona?">❓</button>
+            </h2>
             <div id="ads-requests-form-container"></div>
             <div id="ads-requests-container"></div>
         </section>
 
-        <!-- ===== VENDOR SETTINGS (STATUS DA LOJA) ===== -->
+        <!-- ===== VENDOR SETTINGS (CONFIGURAÇÕES DA LOJA) ===== -->
         <section id="vendor-settings-section" class="hidden animate-in">
-            <h2 class="text-3xl font-black mb-6 text-cyan-500">⚙️ STATUS DA LOJA</h2>
-
-            <div id="global-store-override-section" class="bg-slate-900/50 p-6 rounded-2xl border border-red-500/30 mb-6 hidden">
-                <h3 class="text-lg font-black text-red-400 mb-2">🚨 Fechar a Loja Inteira</h3>
-                <p class="text-xs text-slate-500 mb-4 leading-relaxed">
-                    Isso fecha o marketplace <strong class="text-slate-300">INTEIRO</strong>, pra todos os vendedores, imediatamente
-                    — sobrepõe até o horário automático (Sabbath/noturno). Use só em emergência (imprevisto, manutenção, etc).
-                    Fica fechado até você mesmo reabrir aqui.
-                </p>
-                <div id="global-override-status" class="mb-4 p-3 bg-white/5 rounded-lg text-sm">
-                    Carregando...
-                </div>
-                <button id="global-override-toggle-btn" onclick="window.APP.vendorSettings.toggleGlobalOverride()" class="w-full py-3 rounded-xl font-black text-white transition-all">
-                    Carregando...
-                </button>
-            </div>
+            <h2 class="text-3xl font-black mb-6 text-cyan-500">⚙️ CONFIGURAÇÕES DA LOJA</h2>
 
             <div id="vendor-pix-key-section" class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
-                <h3 class="text-lg font-black text-slate-300 mb-2">💳 Minha Chave Pix</h3>
+                <h3 class="text-lg font-black text-slate-300 mb-2">💳 Minhas Chaves Pix</h3>
                 <p class="text-xs text-slate-500 mb-4 leading-relaxed">
-                    É essa chave que aparece pro comprador na hora de pagar. Sem ela cadastrada, a venda acontece do mesmo jeito, mas o comprador precisa te chamar no WhatsApp pra combinar o pagamento — o que atrasa (e às vezes derruba) a venda.
+                    São essas chaves que aparecem pro comprador na hora de pagar — cadastre quantas quiser (ex: uma do banco, outra do celular). Sem nenhuma cadastrada, a venda acontece do mesmo jeito, mas o comprador precisa te chamar no WhatsApp pra combinar o pagamento — o que atrasa (e às vezes derruba) a venda.
                 </p>
                 <div id="vendor-pix-key-warning" class="hidden mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 font-bold">
-                    ⚠️ Você ainda não cadastrou sua chave Pix — cadastre agora pra não perder vendas.
+                    ⚠️ Você ainda não cadastrou nenhuma chave Pix — cadastre agora pra não perder vendas.
                 </div>
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <input type="text" id="vendor-pix-key-input" placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
-                        class="flex-1 p-3 bg-slate-800 border border-white/10 rounded-lg text-white text-sm placeholder-slate-500">
-                    <button type="button" id="vendor-save-pix-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-3 rounded-lg text-sm transition-all whitespace-nowrap">
-                        💾 Salvar Chave Pix
-                    </button>
-                </div>
+
+                <div id="vendor-pix-keys-list" class="space-y-3 mb-3"></div>
+
+                <button type="button" id="vendor-add-pix-btn" class="w-full mb-3 py-2.5 rounded-xl border border-dashed border-green-500/40 text-green-300 text-xs font-bold hover:bg-green-500/10 transition-all">
+                    ➕ Adicionar outra chave Pix
+                </button>
+
+                <button type="button" id="vendor-save-pix-btn" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-3 rounded-lg text-sm transition-all whitespace-nowrap">
+                    💾 Salvar Chaves Pix
+                </button>
             </div>
 
             <div class="bg-slate-900/50 p-6 rounded-2xl border border-white/5 mb-6">
@@ -792,7 +753,7 @@
 
         <button class="bnav-btn hidden" data-nav="vendor-settings" id="bnav-vendor-settings">
             <i data-lucide="settings" style="color:#06b6d4"></i>
-            <span>Status</span>
+            <span>Config</span>
         </button>
 
         <button class="bnav-btn hidden" data-nav="tenants" id="bnav-tenants">
@@ -875,7 +836,7 @@
                     <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">CADASTRAR</button>
                     <p class="text-[11px] text-slate-500 text-center leading-relaxed">
                         Ao se cadastrar, você concorda com nossa
-                        <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade e Termos de Uso</a>.
+                        <a href="html/privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade e Termos de Uso</a>.
                     </p>
                 </form>
             </div>
@@ -889,6 +850,23 @@
             </div>
 
             <button class="mt-4 w-full text-slate-400 hover:text-white font-bold py-2 transition-all" data-action="close-auth-modal">Fechar</button>
+        </div>
+    </div>
+
+    <!-- ========================================
+         ✅ NOVO: NOVA SENHA (via link de recuperação por e-mail)
+         Aberto automaticamente quando a pessoa chega pelo link de
+         "esqueci minha senha" — ver Auth.openNewPasswordModal().
+         ======================================== -->
+    <div id="new-password-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm p-4">
+        <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
+            <h3 class="text-2xl font-black mb-2">🔑 Nova Senha</h3>
+            <p class="text-slate-400 text-sm mb-6">Digite a nova senha que você quer usar a partir de agora.</p>
+            <form data-form="new-password" class="space-y-4">
+                <input id="new-password-input" type="password" placeholder="Nova senha (mín. 6 caracteres)" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
+                <input id="new-password-confirm" type="password" placeholder="Confirme a nova senha" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all">💾 SALVAR NOVA SENHA</button>
+            </form>
         </div>
     </div>
 
@@ -930,6 +908,32 @@
     </div>
 
     <!-- ========================================
+         ✅ NOVO: ACEITE DAS POLÍTICAS — VIRAR VENDEDOR
+         Aberto pelo botão "🚀 QUERO VENDER" — só promove a conta de
+         verdade depois de marcar o aceite. Ver Auth.openBecomeSellerModal().
+         ======================================== -->
+    <div id="become-seller-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm p-4">
+        <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
+            <h3 class="text-2xl font-black mb-3">🚀 Virar Vendedor</h3>
+            <p class="text-slate-400 text-sm mb-5 leading-relaxed">
+                Você vai passar a poder cadastrar produtos, gerenciar estoque e ver seu próprio painel de BI.
+            </p>
+            <label class="flex items-start gap-3 mb-6 cursor-pointer bg-white/5 p-4 rounded-2xl border border-white/5">
+                <input type="checkbox" id="become-seller-accept" class="mt-0.5 w-5 h-5 flex-shrink-0"
+                    onchange="document.getElementById('become-seller-confirm-btn').disabled = !this.checked">
+                <span class="text-xs text-slate-300 leading-relaxed">
+                    Li e aceito que sou o(a) único(a) responsável pelos produtos que anunciar, e que <strong class="text-white">não vou anunciar produtos ilegais, proibidos ou que violem as regras da comunidade</strong>. Sei que produtos assim podem ser bloqueados ou removidos pela moderação.
+                </span>
+            </label>
+            <button id="become-seller-confirm-btn" type="button" onclick="window.APP.auth._confirmBecomeSeller()" disabled
+                class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">
+                ✅ Confirmar e Virar Vendedor
+            </button>
+            <button type="button" onclick="window.APP.auth.closeBecomeSellerModal()" class="mt-3 w-full text-slate-400 hover:text-white font-bold py-2 transition-all">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- ========================================
          TENANT DETAILS MODAL
          ======================================== -->
     <div id="tenant-details-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm">
@@ -949,6 +953,10 @@
         <div class="bg-[#161b2c] p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="text-2xl font-black mb-6">NOVO PRODUTO</h3>
             <form data-form="product" class="space-y-4">
+                <div id="p-owner-wrap" class="hidden">
+                    <label for="p-owner" class="block text-xs font-bold text-slate-400 mb-1">👤 Vendedor (nome que aparece na vitrine)</label>
+                    <select id="p-owner" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white"></select>
+                </div>
                 <input id="p-name" type="text" placeholder="Nome do Produto" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500" required>
                 <select id="p-category" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white" required>
                     <option value="">Selecione a Categoria</option>
@@ -975,13 +983,13 @@
                 </div>
 
                 <div class="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
-                    <label class="text-xs font-black text-cyan-300 uppercase block mb-2">📦 Preço por Atacado (opcional)</label>
-                    <div class="text-[10px] text-slate-500 mb-3 leading-relaxed">Quanto mais alguém compra, mais barato fica — crie quantas faixas de desconto quiser (ex: 3+ por R$4,00, 6+ por R$3,50...).</div>
+                    <label class="text-xs font-black text-cyan-300 uppercase block mb-2">🏷️ Promoções (opcional)</label>
+                    <div class="text-[10px] text-slate-500 mb-3 leading-relaxed">Crie quantas promoções quiser, do jeito que se fala: "3 por R$10", "1 por R$4"... Preencha a quantidade e o preço TOTAL da promoção (não é o preço por unidade).</div>
 
                     <div id="p-bulk-tiers-list" class="space-y-3 mb-3"></div>
 
                     <button type="button" id="p-bulk-tier-add-btn" class="w-full py-2.5 rounded-xl border border-dashed border-cyan-500/40 text-cyan-300 text-xs font-bold hover:bg-cyan-500/10 transition-all">
-                        ➕ Adicionar outra faixa de desconto
+                        ➕ Adicionar outra promoção
                     </button>
                 </div>
                 <textarea id="p-desc" placeholder="Descrição" class="w-full p-4 rounded-2xl bg-slate-800 border border-white/5 text-white placeholder-slate-500 resize-none h-20"></textarea>
@@ -1014,7 +1022,7 @@
     <div id="product-preview-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[300] backdrop-blur-sm p-4">
         <div class="bg-[#161b2c] rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="preview-media-wrap">
-                <img id="preview-media-img" src="" alt="" class="preview-media-img hidden">
+                <img id="preview-media-img" src="" alt="" class="preview-media-img hidden" onclick="window.APP.products.openImageZoom()">
                 <video id="preview-media-video" class="preview-media-video hidden" controls></video>
                 <div id="preview-media-empty" class="preview-media-empty">SEM IMAGEM</div>
 
@@ -1068,13 +1076,12 @@
                     <option value="">Escolha a forma de pagamento</option>
                     <option value="Pix">Pix</option>
                     <option value="Dinheiro">Dinheiro na Entrega</option>
-                    <option value="Cartão">Cartão na Entrega</option>
                 </select>
                 <button id="btn-finish" type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all">✓ CONFIRMAR COMPRA</button>
                 <button type="button" class="w-full text-slate-400 hover:text-white font-bold py-2 transition-all" data-action="close-checkout-modal">Cancelar</button>
                 <p class="text-[11px] text-slate-500 text-center leading-relaxed">
                     Seus dados são usados apenas para viabilizar esta compra. Veja nossa
-                    <a href="privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade</a>.
+                    <a href="html/privacidade.html" target="_blank" class="text-blue-400 hover:text-blue-300 underline">Política de Privacidade</a>.
                 </p>
             </form>
         </div>
@@ -1089,76 +1096,35 @@
         <i data-lucide="arrow-up"></i>
     </button>
 
-    
 
     <!-- ========================================
-         SCRIPTS — ORDEM CRÍTICA
+         SCRIPTS DO APP — a ordem importa (defer mantém a ordem)
          ======================================== -->
-    <script src="config.js?v=4"></script>
-    <script src="storage.js?v=2"></script>
-    <script src="wrapper.js?v=1"></script>
-    <script src="auth.js?v=9"></script>
-    <script src="store-status.js?v=3"></script>
-    <script src="cart.js?v=5"></script>
-    <script src="products.js?v=14"></script>
-    <script src="ads.js?v=6"></script>
-    <script src="bi.js?v=9"></script>
-    <script src="navigation.js?v=7"></script>
-    <script src="tenants.js?v=6"></script>
-    <script src="orders.js?v=9"></script>
-    <script src="order-management.js?v=2"></script>
-    <script src="admin-warnings.js?v=2"></script>
-    <script src="vendor-settings.js?v=6"></script>
-    <script src="notifications.js?v=2"></script>
-    <script src="moderation.js?v=2"></script>
-    <script src="restock-alerts.js?v=2"></script>
-    <script src="onboarding.js?v=1"></script>
-    <!-- ✅ FIX: o arquivo real do projeto se chama "pwa.js" — o nome
-         "pwa-install.js" que estava aqui não bate com nenhum arquivo,
-         o que causaria um 404 silencioso. -->
-    <script src="pwa.js?v=2"></script>
-    <script src="app.js?v=7"></script>
-    <script src="theme-toggle.js?v=2"></script>
-
-    <!-- Preview em tempo real do anúncio texto -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            document.addEventListener('input', (e) => {
-                if (e.target.id === 'ad-text-title') {
-                    const el = document.getElementById('preview-title');
-                    if (el) el.innerText = e.target.value || 'TÍTULO DO ANÚNCIO';
-                }
-                if (e.target.id === 'ad-text-content') {
-                    const el = document.getElementById('preview-text');
-                    if (el) el.innerText = e.target.value || 'Conteúdo do seu anúncio aparecerá aqui';
-                }
-            });
-
-            function patchCart() {
-                if (!window.APP || !window.APP.cart) { setTimeout(patchCart, 200); return; }
-                const orig = window.APP.cart.updateUI.bind(window.APP.cart);
-                window.APP.cart.updateUI = function() {
-                    orig();
-                    const bnav = document.getElementById('bnav-cart-count');
-                    if (bnav) bnav.textContent = this.items.length;
-                };
-            }
-            patchCart();
-
-            // ✅ NOVO: botão flutuante "voltar ao topo" — aparece só
-            // depois que a pessoa já rolou um pouco a página.
-            const backToTop = document.getElementById('back-to-top');
-            if (backToTop) {
-                window.addEventListener('scroll', () => {
-                    backToTop.classList.toggle('show', window.scrollY > 480);
-                }, { passive: true });
-
-                backToTop.addEventListener('click', () => {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                });
-            }
-        });
-    </script>
+    <script defer src="js/config.js?v=43"></script>
+    <script defer src="js/storage.js?v=43"></script>
+    <script defer src="js/image-zoom.js?v=43"></script>
+    <script defer src="js/auth.js?v=43"></script>
+    <script defer src="js/store-status.js?v=43"></script>
+    <script defer src="js/cart.js?v=43"></script>
+    <script defer src="js/products.js?v=43"></script>
+    <script defer src="js/ads.js?v=43"></script>
+    <script defer src="js/bi.js?v=43"></script>
+    <script defer src="js/navigation.js?v=43"></script>
+    <script defer src="js/tenants.js?v=43"></script>
+    <script defer src="js/orders.js?v=43"></script>
+    <script defer src="js/order-management.js?v=43"></script>
+    <script defer src="js/admin-warnings.js?v=43"></script>
+    <script defer src="js/vendor-settings.js?v=43"></script>
+    <script defer src="js/notifications.js?v=43"></script>
+    <script defer src="js/vendor-notices.js?v=43"></script>
+    <script defer src="js/moderation.js?v=43"></script>
+    <script defer src="js/image-optimizer.js?v=43"></script>
+    <script defer src="js/restock-alerts.js?v=43"></script>
+    <script defer src="js/onboarding.js?v=43"></script>
+    <script defer src="js/pwa.js?v=43"></script>
+    <script defer src="js/app.js?v=43"></script>
+    <script defer src="js/theme-toggle.js?v=43"></script>
+    <script defer src="js/home-extras.js?v=43"></script>
 
 </body>
 </html>

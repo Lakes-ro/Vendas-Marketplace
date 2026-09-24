@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Servidor HTTP local com MIME types corretos para desenvolvimento
- * 
+ *
  * Como usar:
  * 1. Certifique-se que Node.js está instalado
  * 2. Na pasta do projeto, execute: node server.js
@@ -28,6 +28,8 @@ const mimeTypes = {
     '.gif': 'image/gif',
     '.svg': 'image/svg+xml',
     '.ico': 'image/x-icon',
+    '.webp': 'image/webp',
+    '.pdf': 'application/pdf',
     '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
@@ -103,24 +105,13 @@ server.listen(PORT, HOST, () => {
 ✓ Servidor rodando em: http://${HOST}:${PORT}
 ✓ Pressione Ctrl+C para parar
 
-Estrutura esperada:
-  / 
-  ├── index.html
-  ├── manifest.json
-  ├── sw.js
-  └── assets/
-      ├── css/style.css
-      └── js/
-          ├── config.js
-          ├── app.js
-          └── modules/
-              ├── storage.js
-              ├── navigation.js
-              ├── products.js
-              ├── cart.js
-              ├── orders.js
-              ├── bi.js
-              └── ads.js
+Estrutura:
+  /
+  ├── index.html, manifest.json, sw.js
+  ├── html/   (vitrine, privacidade)
+  ├── css/
+  ├── js/
+  └── img/
     `);
 });
 

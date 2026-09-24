@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0e27">
+    <meta name="description" content="Vitrine de Produtos - Compre Agora">
+    <title>Vitrine de Produtos</title>
+
+    <link rel="icon" type="image/png" href="../img/icon-192.png">
+    <link rel="stylesheet" href="../css/style-vitrine.css?v=40">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1 class="header-title">💰 Nossa Vitrine</h1>
+            <a class="header-menu-btn" href="../index.html" aria-label="Ir para a loja completa">🏬</a>
+        </header>
+
+        <main>
+            <div id="product-grid">
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <p style="font-size: 1rem; color: #a0a0b0;">Carregando produtos...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL DE CHECKOUT -->
+    <div id="checkout-modal" class="modal" style="display:none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🛒 Finalizar Compra</h2>
+                <button type="button" class="modal-close" onclick="closeCheckoutModal()" aria-label="Fechar">✕</button>
+            </div>
+
+            <div class="checkout-product-info">
+                <p style="color: #a0a0b0; font-size: 0.875rem; margin-bottom: 6px;">PRODUTO SELECIONADO</p>
+                <h3 class="product-name" id="checkout-product-name">Nome do Produto</h3>
+                <p class="product-price-checkout" id="checkout-product-price">R$ 0,00</p>
+            </div>
+
+            <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: var(--spacing-md); text-align: center;">
+                Para identificarmos você, precisamos de:
+            </h2>
+
+            <form class="checkout-form" id="checkout-form" onsubmit="handleCheckout(event)">
+                <div class="form-group">
+                    <label for="checkout-name" class="form-label">📝 Seu Nome *</label>
+                    <input id="checkout-name" type="text" class="form-input" placeholder="Digite seu nome completo"
+                           required maxlength="80" autocomplete="name">
+                </div>
+
+                <div class="form-group">
+                    <label for="checkout-curso" class="form-label">🎓 Seu Curso/Turma *</label>
+                    <input id="checkout-curso" type="text" class="form-input" placeholder="Ex: Engenharia de Software - 2024"
+                           required maxlength="40" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="checkout-whatsapp" class="form-label">💬 WhatsApp para Contato *</label>
+                    <input id="checkout-whatsapp" type="tel" inputmode="tel" class="form-input" placeholder="(11) 99999-9999"
+                           required maxlength="20" autocomplete="tel">
+                    <small style="color: #6b7c8f; font-size: 0.75rem;">Usaremos para confirmar sua compra</small>
+                </div>
+
+                <input id="checkout-product-id" type="hidden" value="">
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn--secondary" onclick="closeCheckoutModal()">❌ Cancelar</button>
+                    <button type="submit" class="btn btn--primary btn--submit"
+                            style="display: block; width: 100%; position: relative; z-index: 10; padding: 12px 16px;">
+                        ✅ Confirmar Compra
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ORDEM: SDK do Supabase → config.js → script-vitrine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="../js/config.js?v=40"></script>
+    <script defer src="../js/script-vitrine.js?v=40"></script>
+</body>
+</html>

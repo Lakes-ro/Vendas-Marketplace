@@ -1,0 +1,73 @@
+/* ========================================
+   PRIVACIDADE.CSS
+   Estilos da página de Política de Privacidade e Termos de Uso.
+   Substitui o Tailwind via CDN (que baixava o compilador inteiro só
+   pra esta página) — aqui estão só as classes que ela usa.
+   ======================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: #0b0f1a;
+    color: #e2e8f0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, p, ul { margin: 0; }
+h2 { scroll-margin-top: 20px; }
+a { color: inherit; text-decoration: none; }
+
+/* Layout */
+.min-h-screen { min-height: 100vh; }
+.max-w-3xl { max-width: 48rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+.p-5 { padding: 1.25rem; }
+.inline-flex { display: inline-flex; }
+.items-center { align-items: center; }
+.gap-2 { gap: 0.5rem; }
+
+/* Espaçamentos */
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-8 { margin-bottom: 2rem; }
+.mb-10 { margin-bottom: 2.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-12 { margin-top: 3rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-10 > * + * { margin-top: 2.5rem; }
+
+/* Tipografia */
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+@media (min-width: 768px) {
+    .md\:text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+}
+.font-bold { font-weight: 700; }
+.font-black { font-weight: 900; }
+.leading-relaxed { line-height: 1.625; }
+
+/* Cores */
+.text-white { color: #ffffff; }
+.text-slate-300 { color: #cbd5e1; }
+.text-slate-500 { color: #64748b; }
+.text-blue-200 { color: #bfdbfe; }
+.text-blue-500 { color: #3b82f6; }
+.hover\:text-blue-400:hover { color: #60a5fa; }
+
+/* Caixa de destaque */
+.bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.1); }
+.border { border-width: 1px; border-style: solid; }
+.border-blue-500\/20 { border-color: rgba(59, 130, 246, 0.2); }
+.rounded-2xl { border-radius: 1rem; }
+
+/* Listas */
+.list-disc { list-style-type: disc; }
+.list-inside { list-style-position: inside; padding-left: 0; }
+.marker\:text-blue-500 ::marker,
+.marker\:text-blue-500::marker { color: #3b82f6; }
